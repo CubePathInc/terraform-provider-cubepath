@@ -103,7 +103,7 @@ func (r *baremetalResource) Schema(ctx context.Context, _ resource.SchemaRequest
 				},
 			},
 			"model_name": schema.StringAttribute{
-				Description: "The model name for the Baremetal server (e.g., 'bm.e3-1230v5').",
+				Description: "The model name for the Baremetal server (e.g., 'c1.metal.plus').",
 				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),

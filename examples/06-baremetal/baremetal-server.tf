@@ -28,7 +28,7 @@ resource "cubepath_baremetal" "web" {
   hostname      = "web-server"
   project_id    = cubepath_project.main.id
   location      = "us-mia-1"
-  model_name    = "bm.e3-1230v5"
+  model_name    = "c1.metal.plus"
   os_name       = "debian-12"
   password      = "SecurePassword123!"
   ssh_key_names = [cubepath_ssh_key.main.name]
