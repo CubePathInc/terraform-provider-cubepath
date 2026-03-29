@@ -90,7 +90,7 @@ func (d *vpsTemplatesDataSource) Configure(_ context.Context, req datasource.Con
 func (d *vpsTemplatesDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var state vpsTemplatesDataSourceModel
 
-	pricing, err := d.client.Pricing.Get(ctx)
+	templates, err := d.client.VPS.Templates(ctx)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error reading VPS templates",
@@ -99,11 +99,10 @@ func (d *vpsTemplatesDataSource) Read(ctx context.Context, req datasource.ReadRe
 		return
 	}
 
-	// Extract templates
 	state.ID = types.StringValue("vps_templates")
 	state.Templates = make([]vpsTemplateModel, 0)
 
-	for _, template := range pricing.VPS.Templates {
+	for _, template := range templates.OperatingSystems {
 		state.Templates = append(state.Templates, vpsTemplateModel{
 			TemplateName: types.StringValue(template.TemplateName),
 			OSName:       types.StringValue(template.OSName),

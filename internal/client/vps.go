@@ -151,6 +151,21 @@ func (v *VPSService) WaitForVPSDestroy(ctx context.Context, vpsID int, timeout t
 	return err
 }
 
+// VPSTemplatesResponse represents the response from /vps/templates
+type VPSTemplatesResponse struct {
+	OperatingSystems []VPSTemplate `json:"operating_systems"`
+}
+
+// Templates lists available VPS templates
+func (v *VPSService) Templates(ctx context.Context) (*VPSTemplatesResponse, error) {
+	var result VPSTemplatesResponse
+	err := v.client.Get(ctx, "/vps/templates", &result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list VPS templates: %w", err)
+	}
+	return &result, nil
+}
+
 // Power sends a power control command to a VPS
 // powerType can be: start_vps, stop_vps, restart_vps, reset_vps
 func (v *VPSService) Power(ctx context.Context, vpsID int, powerType string) (*TaskResponse, error) {
