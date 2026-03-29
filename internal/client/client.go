@@ -40,6 +40,7 @@ type Client struct {
 	DNS          *DNSService
 	LoadBalancer *LoadBalancerService
 	CDN          *CDNService
+	Kubernetes   *KubernetesService
 }
 
 // ClientOption is a function that configures a Client
@@ -121,6 +122,7 @@ func NewClient(apiToken, baseURL string, opts ...ClientOption) (*Client, error) 
 	client.DNS = NewDNSService(client)
 	client.LoadBalancer = NewLoadBalancerService(client)
 	client.CDN = NewCDNService(client)
+	client.Kubernetes = NewKubernetesService(client)
 
 	return client, nil
 }

@@ -170,6 +170,10 @@ func (p *cubePathProvider) DataSources(_ context.Context) []func() datasource.Da
 		NewDNSZonesDataSource,
 		NewLBPlansDataSource,
 		NewCDNPlansDataSource,
+		NewKubernetesVersionsDataSource,
+		NewKubernetesPlansDataSource,
+		NewKubernetesAddonsDataSource,
+		NewKubeconfigDataSource,
 	}
 }
 
@@ -191,5 +195,8 @@ func (p *cubePathProvider) Resources(_ context.Context) []func() resource.Resour
 		NewCDNOriginResource,
 		NewCDNRuleResource,
 		NewCDNWAFRuleResource,
+		NewKubernetesClusterResource,
+		NewKubernetesNodePoolResource,
+		NewKubernetesAddonResource,
 	}
 }
