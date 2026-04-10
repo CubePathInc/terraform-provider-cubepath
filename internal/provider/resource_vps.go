@@ -694,8 +694,8 @@ func (r *vpsResource) updateStateFromVPS(ctx context.Context, state *vpsResource
 	// Set IPv4 based on whether VPS has an IPv4 address
 	state.IPv4 = types.BoolValue(hasIPv4)
 
-	// EnableBackups and CustomCloudInit are write-only, preserve from state if not null
-	if state.EnableBackups.IsNull() {
+	// EnableBackups and CustomCloudInit are write-only, preserve from state if not null/unknown
+	if state.EnableBackups.IsNull() || state.EnableBackups.IsUnknown() {
 		state.EnableBackups = types.BoolValue(false)
 	}
 
