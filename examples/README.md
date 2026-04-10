@@ -105,6 +105,14 @@ CDN zone with origins and rules:
 Query DNS zones, LB plans, and CDN plans:
 - `main.tf` - List DNS zones, LB plans, CDN plans
 
+### 12. Kubernetes
+Kubernetes cluster deployment:
+- `main.tf` - Create cluster, node pools, addons
+
+### 13. Availability Groups
+High availability with availability groups:
+- `main.tf` - Create availability group, deploy VPS across different physical hosts, query groups
+
 ## Usage
 
 Navigate to any example directory and run:

@@ -29,18 +29,19 @@ type Client struct {
 	rateLimiter *rate.Limiter
 
 	// Services
-	SSHKeys      *SSHKeys
-	Projects     *Projects
-	VPS          *VPSService
-	Baremetal    *BaremetalService
-	Networks     *Networks
-	Pricing      *Pricing
-	FloatingIPs  *FloatingIPs
-	Firewall     *FirewallService
-	DNS          *DNSService
-	LoadBalancer *LoadBalancerService
-	CDN          *CDNService
-	Kubernetes   *KubernetesService
+	SSHKeys            *SSHKeys
+	Projects           *Projects
+	VPS                *VPSService
+	Baremetal          *BaremetalService
+	Networks           *Networks
+	Pricing            *Pricing
+	FloatingIPs        *FloatingIPs
+	Firewall           *FirewallService
+	DNS                *DNSService
+	LoadBalancer       *LoadBalancerService
+	CDN                *CDNService
+	Kubernetes         *KubernetesService
+	AvailabilityGroups *AvailabilityGroups
 }
 
 // ClientOption is a function that configures a Client
@@ -123,6 +124,7 @@ func NewClient(apiToken, baseURL string, opts ...ClientOption) (*Client, error) 
 	client.LoadBalancer = NewLoadBalancerService(client)
 	client.CDN = NewCDNService(client)
 	client.Kubernetes = NewKubernetesService(client)
+	client.AvailabilityGroups = NewAvailabilityGroups(client)
 
 	return client, nil
 }

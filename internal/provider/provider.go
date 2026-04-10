@@ -174,6 +174,7 @@ func (p *cubePathProvider) DataSources(_ context.Context) []func() datasource.Da
 		NewKubernetesPlansDataSource,
 		NewKubernetesAddonsDataSource,
 		NewKubeconfigDataSource,
+		NewAvailabilityGroupsDataSource,
 	}
 }
 
@@ -198,5 +199,6 @@ func (p *cubePathProvider) Resources(_ context.Context) []func() resource.Resour
 		NewKubernetesClusterResource,
 		NewKubernetesNodePoolResource,
 		NewKubernetesAddonResource,
+		NewAvailabilityGroupResource,
 	}
 }

@@ -86,11 +86,36 @@ resource "cubepath_vps" "web" {
 - `cubepath_project` - Manage projects
 - `cubepath_network` - Manage private networks
 - `cubepath_vps` - Manage VPS instances
+- `cubepath_baremetal` - Manage baremetal servers
+- `cubepath_firewall_group` - Manage firewall groups
+- `cubepath_floating_ip` - Manage floating IPs
+- `cubepath_dns_zone` - Manage DNS zones
+- `cubepath_dns_record` - Manage DNS records
+- `cubepath_load_balancer` - Manage load balancers
+- `cubepath_lb_listener` - Manage load balancer listeners
+- `cubepath_cdn_zone` - Manage CDN zones
+- `cubepath_cdn_origin` - Manage CDN origins
+- `cubepath_cdn_rule` - Manage CDN cache rules
+- `cubepath_cdn_waf_rule` - Manage CDN WAF rules
+- `cubepath_kubernetes_cluster` - Manage Kubernetes clusters
+- `cubepath_kubernetes_node_pool` - Manage Kubernetes node pools
+- `cubepath_kubernetes_addon` - Manage Kubernetes addons
+- `cubepath_availability_group` - Manage availability groups for high availability
 
 ### Data Sources
 - `cubepath_locations` - List available locations
 - `cubepath_vps_plans` - List available VPS plans and pricing
 - `cubepath_vps_templates` - List available OS templates
+- `cubepath_ssh_key` - Look up an existing SSH key
+- `cubepath_firewall_groups` - List firewall groups
+- `cubepath_dns_zones` - List DNS zones
+- `cubepath_lb_plans` - List load balancer plans
+- `cubepath_cdn_plans` - List CDN plans
+- `cubepath_kubernetes_versions` - List Kubernetes versions
+- `cubepath_kubernetes_plans` - List Kubernetes node plans
+- `cubepath_kubernetes_addons` - List Kubernetes addons
+- `cubepath_kubeconfig` - Get cluster kubeconfig
+- `cubepath_availability_groups` - List availability groups for a project
 
 ## Examples
 
