@@ -142,8 +142,11 @@ func (r *availabilityGroupResource) Create(ctx context.Context, req resource.Cre
 	plan.Strategy = types.StringValue(group.Strategy)
 	plan.MaxServers = types.Int64Value(int64(group.MaxServers))
 	plan.VPSCount = types.Int64Value(int64(group.VPSCount))
-	plan.Description = types.StringValue(group.Description)
 	plan.CreatedAt = types.StringValue(group.CreatedAt)
+	// Keep plan description — the API create response may not echo it back
+	if group.Description != "" {
+		plan.Description = types.StringValue(group.Description)
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }

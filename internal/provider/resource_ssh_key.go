@@ -125,7 +125,7 @@ func (r *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 	if err != nil {
 		// If the key already exists, adopt it instead of failing
 		if apiErr, ok := err.(*client.APIError); ok && apiErr.IsBadRequest() {
-			existing, lookupErr := r.client.SSHKeys.GetByName(ctx, plan.Name.ValueString())
+			existing, lookupErr := r.client.SSHKeys.FindExisting(ctx, plan.Name.ValueString(), plan.PublicKey.ValueString())
 			if lookupErr != nil {
 				resp.Diagnostics.AddError(
 					"Error creating SSH key",

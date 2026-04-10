@@ -94,6 +94,34 @@ func (s *SSHKeys) GetByName(ctx context.Context, name string) (*SSHKey, error) {
 	}
 }
 
+// FindExisting searches for an SSH key by name first, then by public key content
+func (s *SSHKeys) FindExisting(ctx context.Context, name, publicKey string) (*SSHKey, error) {
+	keys, err := s.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Try by name first
+	for _, key := range keys {
+		if key.Name == name {
+			return &key, nil
+		}
+	}
+
+	// Fall back to matching by public key content
+	for _, key := range keys {
+		if key.SSHKey == publicKey {
+			return &key, nil
+		}
+	}
+
+	return nil, &APIError{
+		StatusCode: 404,
+		Message:    "Not Found",
+		Detail:     fmt.Sprintf("SSH key with name %q or matching public key not found", name),
+	}
+}
+
 // Delete deletes an SSH key by ID
 func (s *SSHKeys) Delete(ctx context.Context, id int) error {
 	err := s.client.Delete(ctx, fmt.Sprintf("/sshkey/%d", id))
