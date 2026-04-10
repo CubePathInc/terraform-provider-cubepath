@@ -131,11 +131,23 @@ func (r *availabilityGroupResource) Create(ctx context.Context, req resource.Cre
 
 	group, err := r.client.AvailabilityGroups.Create(ctx, createReq)
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error creating availability group",
-			"Could not create availability group, unexpected error: "+err.Error(),
-		)
-		return
+		if apiErr, ok := err.(*client.APIError); ok && apiErr.IsBadRequest() {
+			existing, lookupErr := r.client.AvailabilityGroups.FindByName(ctx, int(plan.ProjectID.ValueInt64()), plan.Name.ValueString())
+			if lookupErr != nil {
+				resp.Diagnostics.AddError(
+					"Error creating availability group",
+					"Availability group already exists but could not be found: "+err.Error(),
+				)
+				return
+			}
+			group = existing
+		} else {
+			resp.Diagnostics.AddError(
+				"Error creating availability group",
+				"Could not create availability group, unexpected error: "+err.Error(),
+			)
+			return
+		}
 	}
 
 	plan.ID = types.StringValue(group.UUID)
@@ -155,6 +167,11 @@ func (r *availabilityGroupResource) Read(ctx context.Context, req resource.ReadR
 	var state availabilityGroupResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if state.ID.IsNull() || state.ID.IsUnknown() || state.ID.ValueString() == "" {
+		resp.State.RemoveResource(ctx)
 		return
 	}
 

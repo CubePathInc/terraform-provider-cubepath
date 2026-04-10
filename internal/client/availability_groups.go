@@ -80,6 +80,26 @@ func (s *AvailabilityGroups) List(ctx context.Context, projectID int) ([]Availab
 	return result.Groups, nil
 }
 
+// FindByName searches for an availability group by name within a project
+func (s *AvailabilityGroups) FindByName(ctx context.Context, projectID int, name string) (*AvailabilityGroup, error) {
+	groups, err := s.List(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, group := range groups {
+		if group.Name == name {
+			return &group, nil
+		}
+	}
+
+	return nil, &APIError{
+		StatusCode: 404,
+		Message:    "Not Found",
+		Detail:     fmt.Sprintf("availability group with name %q not found in project %d", name, projectID),
+	}
+}
+
 // Delete deletes an availability group by UUID
 func (s *AvailabilityGroups) Delete(ctx context.Context, uuid string) error {
 	err := s.client.Delete(ctx, fmt.Sprintf("/vps/availability-groups/%s", uuid))
