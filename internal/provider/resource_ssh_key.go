@@ -115,32 +115,25 @@ func (r *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	// Create new SSH key
-	createReq := &client.CreateSSHKeyRequest{
-		Name:   plan.Name.ValueString(),
-		SSHKey: plan.PublicKey.ValueString(),
-	}
-
-	sshKey, err := r.client.SSHKeys.Create(ctx, createReq)
-	if err != nil {
-		// If the key already exists, adopt it instead of failing
-		if apiErr, ok := err.(*client.APIError); ok && apiErr.IsBadRequest() {
-			existing, lookupErr := r.client.SSHKeys.FindExisting(ctx, plan.Name.ValueString(), plan.PublicKey.ValueString())
-			if lookupErr != nil {
-				resp.Diagnostics.AddError(
-					"Error creating SSH key",
-					"SSH key already exists but could not be found: "+err.Error(),
-				)
-				return
-			}
-			sshKey = existing
-		} else {
+	// Check if an SSH key with this name or public key already exists before creating
+	existing, _ := r.client.SSHKeys.FindExisting(ctx, plan.Name.ValueString(), plan.PublicKey.ValueString())
+	var sshKey *client.SSHKey
+	if existing != nil {
+		sshKey = existing
+	} else {
+		createReq := &client.CreateSSHKeyRequest{
+			Name:   plan.Name.ValueString(),
+			SSHKey: plan.PublicKey.ValueString(),
+		}
+		created, err := r.client.SSHKeys.Create(ctx, createReq)
+		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error creating SSH key",
 				"Could not create SSH key, unexpected error: "+err.Error(),
 			)
 			return
 		}
+		sshKey = created
 	}
 
 	// Map response body to schema and populate Computed attribute values
@@ -193,7 +186,11 @@ func (r *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 	}
 
 	// Overwrite items with refreshed state
-	state.Name = types.StringValue(sshKey.Name)
+	// Preserve user-provided name to avoid drift loops when adopting a key
+	// that was created in CubePath with a different name.
+	if state.Name.IsNull() || state.Name.IsUnknown() || state.Name.ValueString() == "" {
+		state.Name = types.StringValue(sshKey.Name)
+	}
 	state.Fingerprint = types.StringValue(sshKey.Fingerprint)
 	state.KeyType = types.StringValue(sshKey.KeyType)
 	if sshKey.CreatedAt != "" {

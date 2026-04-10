@@ -98,32 +98,25 @@ func (r *projectResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	// Create new project
-	createReq := &client.CreateProjectRequest{
-		Name:        plan.Name.ValueString(),
-		Description: plan.Description.ValueString(),
-	}
-
-	project, err := r.client.Projects.Create(ctx, createReq)
-	if err != nil {
-		// If the project already exists, adopt it instead of failing
-		if apiErr, ok := err.(*client.APIError); ok && apiErr.IsBadRequest() {
-			existing, lookupErr := r.client.Projects.GetByName(ctx, plan.Name.ValueString())
-			if lookupErr != nil {
-				resp.Diagnostics.AddError(
-					"Error creating project",
-					"Project already exists but could not be found: "+err.Error(),
-				)
-				return
-			}
-			project = &existing.Project
-		} else {
+	// Check if a project with this name already exists before creating
+	existingResp, _ := r.client.Projects.GetByName(ctx, plan.Name.ValueString())
+	var project *client.Project
+	if existingResp != nil {
+		project = &existingResp.Project
+	} else {
+		createReq := &client.CreateProjectRequest{
+			Name:        plan.Name.ValueString(),
+			Description: plan.Description.ValueString(),
+		}
+		created, err := r.client.Projects.Create(ctx, createReq)
+		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error creating project",
 				"Could not create project, unexpected error: "+err.Error(),
 			)
 			return
 		}
+		project = created
 	}
 
 	// Map response to schema
@@ -168,7 +161,11 @@ func (r *projectResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 
 	// Update state
-	state.Name = types.StringValue(projectResp.Project.Name)
+	// Preserve user-provided name to avoid drift loops when adopting a project
+	// that was created in CubePath with a different name.
+	if state.Name.IsNull() || state.Name.IsUnknown() || state.Name.ValueString() == "" {
+		state.Name = types.StringValue(projectResp.Project.Name)
+	}
 	state.Description = types.StringValue(projectResp.Project.Description)
 	state.CreatedAt = types.StringValue(projectResp.Project.CreatedAt.String())
 

@@ -122,32 +122,27 @@ func (r *availabilityGroupResource) Create(ctx context.Context, req resource.Cre
 		return
 	}
 
-	createReq := &client.CreateAvailabilityGroupRequest{
-		ProjectID:    int(plan.ProjectID.ValueInt64()),
-		Name:         plan.Name.ValueString(),
-		Description:  plan.Description.ValueString(),
-		LocationName: plan.LocationName.ValueString(),
-	}
-
-	group, err := r.client.AvailabilityGroups.Create(ctx, createReq)
-	if err != nil {
-		if apiErr, ok := err.(*client.APIError); ok && apiErr.IsBadRequest() {
-			existing, lookupErr := r.client.AvailabilityGroups.FindByName(ctx, int(plan.ProjectID.ValueInt64()), plan.Name.ValueString())
-			if lookupErr != nil {
-				resp.Diagnostics.AddError(
-					"Error creating availability group",
-					"Availability group already exists but could not be found: "+err.Error(),
-				)
-				return
-			}
-			group = existing
-		} else {
+	// Check if an availability group with this name already exists before creating
+	existing, _ := r.client.AvailabilityGroups.FindByName(ctx, int(plan.ProjectID.ValueInt64()), plan.Name.ValueString())
+	var group *client.AvailabilityGroup
+	if existing != nil {
+		group = existing
+	} else {
+		createReq := &client.CreateAvailabilityGroupRequest{
+			ProjectID:    int(plan.ProjectID.ValueInt64()),
+			Name:         plan.Name.ValueString(),
+			Description:  plan.Description.ValueString(),
+			LocationName: plan.LocationName.ValueString(),
+		}
+		created, err := r.client.AvailabilityGroups.Create(ctx, createReq)
+		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error creating availability group",
 				"Could not create availability group, unexpected error: "+err.Error(),
 			)
 			return
 		}
+		group = created
 	}
 
 	plan.ID = types.StringValue(group.UUID)

@@ -15,14 +15,27 @@ func NewNetworks(client *Client) *Networks {
 	return &Networks{client: client}
 }
 
+// networkCreateResponse represents the API response when creating a network
+type networkCreateResponse struct {
+	Detail    string `json:"detail"`
+	NetworkID int    `json:"network_id"`
+	Name      string `json:"name"`
+}
+
 // Create creates a new network
 func (n *Networks) Create(ctx context.Context, req *CreateNetworkRequest) (*Network, error) {
-	var result Network
-	err := n.client.Post(ctx, "/networks/create_network", req, &result)
+	var createResp networkCreateResponse
+	err := n.client.Post(ctx, "/networks/create_network", req, &createResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create network: %w", err)
 	}
-	return &result, nil
+
+	// Fetch the full network object by ID
+	network, err := n.Get(ctx, createResp.NetworkID)
+	if err != nil {
+		return nil, fmt.Errorf("network created (ID %d) but failed to fetch details: %w", createResp.NetworkID, err)
+	}
+	return network, nil
 }
 
 // Get retrieves a specific network by ID
@@ -45,6 +58,30 @@ func (n *Networks) Get(ctx context.Context, networkID int) (*Network, error) {
 		StatusCode: 404,
 		Message:    "Not Found",
 		Detail:     fmt.Sprintf("network with ID %d not found", networkID),
+	}
+}
+
+// FindByName searches for a network by name within a project
+func (n *Networks) FindByName(ctx context.Context, projectID int, name string) (*Network, error) {
+	projects, err := n.client.Projects.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, projectResp := range projects {
+		if projectResp.Project.ID == projectID {
+			for _, network := range projectResp.Networks {
+				if network.Name == name {
+					return &network, nil
+				}
+			}
+		}
+	}
+
+	return nil, &APIError{
+		StatusCode: 404,
+		Message:    "Not Found",
+		Detail:     fmt.Sprintf("network with name %q not found in project %d", name, projectID),
 	}
 }
 

@@ -181,20 +181,30 @@ func (r *firewallGroupResource) Create(ctx context.Context, req resource.CreateR
 		rules = append(rules, rule)
 	}
 
-	// Create firewall group via API
-	createReq := &client.CreateFirewallGroupRequest{
-		Name:    plan.Name.ValueString(),
-		Rules:   rules,
-		Enabled: plan.Enabled.ValueBool(),
+	// Check if a firewall group with this name already exists before creating
+	var group *client.FirewallGroup
+	existingGroups, _ := r.client.Firewall.List(ctx)
+	for i := range existingGroups {
+		if existingGroups[i].ProjectID == int(plan.ProjectID.ValueInt64()) && existingGroups[i].Name == plan.Name.ValueString() {
+			group = &existingGroups[i]
+			break
+		}
 	}
-
-	group, err := r.client.Firewall.Create(ctx, int(plan.ProjectID.ValueInt64()), createReq)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error creating firewall group",
-			"Could not create firewall group: "+err.Error(),
-		)
-		return
+	if group == nil {
+		createReq := &client.CreateFirewallGroupRequest{
+			Name:    plan.Name.ValueString(),
+			Rules:   rules,
+			Enabled: plan.Enabled.ValueBool(),
+		}
+		created, err := r.client.Firewall.Create(ctx, int(plan.ProjectID.ValueInt64()), createReq)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error creating firewall group",
+				"Could not create firewall group: "+err.Error(),
+			)
+			return
+		}
+		group = created
 	}
 
 	// Map response to state

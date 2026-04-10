@@ -152,20 +152,28 @@ func (r *networkResource) Create(ctx context.Context, req resource.CreateRequest
 		createReq.Label = plan.Label.ValueString()
 	}
 
-	network, err := r.client.Networks.Create(ctx, createReq)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error creating network",
-			"Could not create network: "+err.Error(),
-		)
-		return
+	// Check if a network with this name already exists in the project before creating
+	existing, _ := r.client.Networks.FindByName(ctx, int(plan.ProjectID.ValueInt64()), plan.Name.ValueString())
+	var network *client.Network
+	if existing != nil {
+		network = existing
+	} else {
+		created, err := r.client.Networks.Create(ctx, createReq)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error creating network",
+				"Could not create network: "+err.Error(),
+			)
+			return
+		}
+		network = created
 	}
 
 	// Update state
 	plan.ID = types.StringValue(strconv.Itoa(network.ID))
 	plan.CIDR = types.StringValue(fmt.Sprintf("%s/%d", network.IPRange, network.Prefix))
 	plan.CreatedAt = types.StringValue(network.CreatedAt.String())
-	if plan.Label.IsNull() {
+	if plan.Label.IsNull() || plan.Label.IsUnknown() {
 		plan.Label = types.StringValue(network.Label)
 	}
 

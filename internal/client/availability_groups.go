@@ -7,16 +7,16 @@ import (
 
 // AvailabilityGroup represents an availability group
 type AvailabilityGroup struct {
-	UUID         string                  `json:"uuid"`
-	ProjectID    int                     `json:"project_id"`
-	Name         string                  `json:"name"`
-	Description  string                  `json:"description"`
-	Strategy     string                  `json:"strategy"`
-	LocationName string                  `json:"location_name"`
-	MaxServers   int                     `json:"max_servers"`
-	VPSCount     int                     `json:"vps_count"`
-	VPSList      []AvailabilityGroupVPS  `json:"vps_list"`
-	CreatedAt    string                  `json:"created_at"`
+	UUID         string                 `json:"uuid"`
+	ProjectID    int                    `json:"project_id"`
+	Name         string                 `json:"name"`
+	Description  string                 `json:"description"`
+	Strategy     string                 `json:"strategy"`
+	LocationName string                 `json:"location_name"`
+	MaxServers   int                    `json:"max_servers"`
+	VPSCount     int                    `json:"vps_count"`
+	VPSList      []AvailabilityGroupVPS `json:"vps_list"`
+	CreatedAt    string                 `json:"created_at"`
 }
 
 // AvailabilityGroupVPS represents a VPS within an availability group
