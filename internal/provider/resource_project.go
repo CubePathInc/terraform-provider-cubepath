@@ -106,11 +106,24 @@ func (r *projectResource) Create(ctx context.Context, req resource.CreateRequest
 
 	project, err := r.client.Projects.Create(ctx, createReq)
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error creating project",
-			"Could not create project, unexpected error: "+err.Error(),
-		)
-		return
+		// If the project already exists, adopt it instead of failing
+		if apiErr, ok := err.(*client.APIError); ok && apiErr.IsBadRequest() {
+			existing, lookupErr := r.client.Projects.GetByName(ctx, plan.Name.ValueString())
+			if lookupErr != nil {
+				resp.Diagnostics.AddError(
+					"Error creating project",
+					"Project already exists but could not be found: "+err.Error(),
+				)
+				return
+			}
+			project = &existing.Project
+		} else {
+			resp.Diagnostics.AddError(
+				"Error creating project",
+				"Could not create project, unexpected error: "+err.Error(),
+			)
+			return
+		}
 	}
 
 	// Map response to schema

@@ -74,6 +74,26 @@ func (s *SSHKeys) Get(ctx context.Context, id int) (*SSHKey, error) {
 	}
 }
 
+// GetByName retrieves a specific SSH key by name
+func (s *SSHKeys) GetByName(ctx context.Context, name string) (*SSHKey, error) {
+	keys, err := s.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, key := range keys {
+		if key.Name == name {
+			return &key, nil
+		}
+	}
+
+	return nil, &APIError{
+		StatusCode: 404,
+		Message:    "Not Found",
+		Detail:     fmt.Sprintf("SSH key with name %q not found", name),
+	}
+}
+
 // Delete deletes an SSH key by ID
 func (s *SSHKeys) Delete(ctx context.Context, id int) error {
 	err := s.client.Delete(ctx, fmt.Sprintf("/sshkey/%d", id))

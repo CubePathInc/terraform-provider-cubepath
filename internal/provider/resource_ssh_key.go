@@ -123,11 +123,24 @@ func (r *sshKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	sshKey, err := r.client.SSHKeys.Create(ctx, createReq)
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error creating SSH key",
-			"Could not create SSH key, unexpected error: "+err.Error(),
-		)
-		return
+		// If the key already exists, adopt it instead of failing
+		if apiErr, ok := err.(*client.APIError); ok && apiErr.IsBadRequest() {
+			existing, lookupErr := r.client.SSHKeys.GetByName(ctx, plan.Name.ValueString())
+			if lookupErr != nil {
+				resp.Diagnostics.AddError(
+					"Error creating SSH key",
+					"SSH key already exists but could not be found: "+err.Error(),
+				)
+				return
+			}
+			sshKey = existing
+		} else {
+			resp.Diagnostics.AddError(
+				"Error creating SSH key",
+				"Could not create SSH key, unexpected error: "+err.Error(),
+			)
+			return
+		}
 	}
 
 	// Map response body to schema and populate Computed attribute values

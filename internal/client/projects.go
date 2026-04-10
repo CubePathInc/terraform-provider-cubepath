@@ -73,6 +73,26 @@ func (p *Projects) Get(ctx context.Context, id int) (*ProjectResponse, error) {
 	}
 }
 
+// GetByName retrieves a specific project by name
+func (p *Projects) GetByName(ctx context.Context, name string) (*ProjectResponse, error) {
+	projects, err := p.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, projectResp := range projects {
+		if projectResp.Project.Name == name {
+			return &projectResp, nil
+		}
+	}
+
+	return nil, &APIError{
+		StatusCode: 404,
+		Message:    "Not Found",
+		Detail:     fmt.Sprintf("project with name %q not found", name),
+	}
+}
+
 // Update updates a project (description only)
 func (p *Projects) Update(ctx context.Context, id int, req *CreateProjectRequest) (*Project, error) {
 	var result Project
