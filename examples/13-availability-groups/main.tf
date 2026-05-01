@@ -41,7 +41,7 @@ resource "cubepath_vps" "web" {
   location      = "us-mia-1"
   plan_name     = "gp.nano"
   template_name = "debian-12"
-  ssh_key_names = [cubepath_ssh_key.main.name]
+  ssh_key_ids   = [tonumber(cubepath_ssh_key.main.id)]
 
   availability_group_uuid = cubepath_availability_group.web.id
 

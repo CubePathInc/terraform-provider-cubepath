@@ -30,8 +30,8 @@ resource "cubepath_vps" "web" {
   template_name = "debian-12"
 
   # Both authentication methods
-  ssh_key_names = [cubepath_ssh_key.main.name]
-  password      = var.root_password
+  ssh_key_ids = [tonumber(cubepath_ssh_key.main.id)]
+  password    = var.root_password
 
   timeouts {
     create = "15m"

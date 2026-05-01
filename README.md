@@ -49,8 +49,9 @@ resource "cubepath_ssh_key" "main" {
   public_key = file("~/.ssh/id_rsa.pub")
 }
 
-# Option 2: Use an existing SSH key (no resource needed)
-# Just reference it by name in VPS: ssh_key_names = ["existing-key-name"]
+# Option 2: Look up an existing SSH key by name (no resource needed)
+# data "cubepath_ssh_key" "existing" { name = "existing-key-name" }
+# Then in VPS: ssh_key_ids = [tonumber(data.cubepath_ssh_key.existing.id)]
 
 # Create a project
 resource "cubepath_project" "app" {
@@ -75,7 +76,7 @@ resource "cubepath_vps" "web" {
   plan_name     = "gp.pro"
   template_name = "debian-12"
   network_id    = cubepath_network.private.id
-  ssh_key_names = [cubepath_ssh_key.main.name]
+  ssh_key_ids = [tonumber(cubepath_ssh_key.main.id)]
 }
 ```
 
@@ -209,7 +210,7 @@ If you get this error, you have 3 options:
 ```hcl
 resource "cubepath_vps" "web" {
   # ... other config ...
-  ssh_key_names = ["your-existing-key-name"]  # Just reference by name
+  ssh_key_ids = [12]  # Just reference by name
 }
 ```
 

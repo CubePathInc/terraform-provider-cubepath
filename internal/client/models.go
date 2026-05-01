@@ -187,7 +187,7 @@ type CreateVPSRequest struct {
 	LocationName          string   `json:"location_name"`
 	Label                 string   `json:"label"`
 	NetworkID             *int     `json:"network_id,omitempty"`
-	SSHKeyNames           []string `json:"ssh_key_names,omitempty"`
+	SSHKeyIDs             []int    `json:"ssh_key_ids,omitempty"`
 	User                  string   `json:"user,omitempty"`
 	Password              string   `json:"password,omitempty"`
 	IPv4                  *bool    `json:"ipv4,omitempty"`
@@ -227,7 +227,7 @@ type CreateBaremetalRequest struct {
 	Label          string   `json:"label,omitempty"`
 	User           string   `json:"user,omitempty"`
 	Password       string   `json:"password"`
-	SSHKeyNames    []string `json:"ssh_key_names,omitempty"`
+	SSHKeyIDs      []int    `json:"ssh_key_ids,omitempty"`
 	OSName         string   `json:"os_name,omitempty"`
 	DiskLayoutName string   `json:"disk_layout_name,omitempty"`
 }
@@ -245,7 +245,7 @@ type ReinstallBaremetalRequest struct {
 	User           string   `json:"user,omitempty"`
 	Password       string   `json:"password"`
 	Hostname       string   `json:"hostname,omitempty"`
-	SSHKeyNames    []string `json:"ssh_key_names,omitempty"`
+	SSHKeyIDs      []int    `json:"ssh_key_ids,omitempty"`
 }
 
 // TaskResponse represents a response with a task ID

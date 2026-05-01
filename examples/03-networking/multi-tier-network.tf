@@ -41,7 +41,7 @@ resource "cubepath_vps" "web" {
   plan_name     = "gp.starter"
   template_name = "debian-12"
   network_id    = cubepath_network.backend.id
-  ssh_key_names = [cubepath_ssh_key.main.name]
+  ssh_key_ids   = [tonumber(cubepath_ssh_key.main.id)]
 
   timeouts {
     create = "15m"
@@ -56,7 +56,7 @@ resource "cubepath_vps" "database" {
   plan_name     = "gp.medium"
   template_name = "ubuntu-22"
   network_id    = cubepath_network.backend.id
-  ssh_key_names = [cubepath_ssh_key.main.name]
+  ssh_key_ids   = [tonumber(cubepath_ssh_key.main.id)]
 
   timeouts {
     create = "15m"

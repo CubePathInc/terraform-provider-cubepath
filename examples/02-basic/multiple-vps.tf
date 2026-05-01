@@ -30,7 +30,7 @@ resource "cubepath_vps" "web" {
   location      = "us-mia-1"
   plan_name     = "gp.micro"
   template_name = "debian-12"
-  ssh_key_names = [cubepath_ssh_key.main.name]
+  ssh_key_ids   = [tonumber(cubepath_ssh_key.main.id)]
 
   timeouts {
     create = "15m"

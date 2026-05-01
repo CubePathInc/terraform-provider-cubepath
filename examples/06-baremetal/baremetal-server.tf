@@ -25,13 +25,13 @@ resource "cubepath_project" "main" {
 
 # Deploy Baremetal server
 resource "cubepath_baremetal" "web" {
-  hostname      = "web-server"
-  project_id    = cubepath_project.main.id
-  location      = "us-mia-1"
-  model_name    = "c1.metal.plus"
-  os_name       = "debian-12"
-  password      = "SecurePassword123!"
-  ssh_key_names = [cubepath_ssh_key.main.name]
+  hostname    = "web-server"
+  project_id  = cubepath_project.main.id
+  location    = "us-mia-1"
+  model_name  = "c1.metal.plus"
+  os_name     = "debian-12"
+  password    = "SecurePassword123!"
+  ssh_key_ids = [tonumber(cubepath_ssh_key.main.id)]
 
   # Optional: custom user (defaults to root)
   # user = "admin"

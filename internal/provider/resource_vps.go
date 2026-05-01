@@ -45,7 +45,7 @@ type vpsResourceModel struct {
 	PlanName              types.String   `tfsdk:"plan_name"`
 	TemplateName          types.String   `tfsdk:"template_name"`
 	NetworkID             types.Int64    `tfsdk:"network_id"`
-	SSHKeyNames           types.List     `tfsdk:"ssh_key_names"`
+	SSHKeyIDs             types.List     `tfsdk:"ssh_key_ids"`
 	User                  types.String   `tfsdk:"user"`
 	Password              types.String   `tfsdk:"password"`
 	IPv4                  types.Bool     `tfsdk:"ipv4"`
@@ -126,10 +126,10 @@ func (r *vpsResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp
 					int64planmodifier.RequiresReplace(),
 				},
 			},
-			"ssh_key_names": schema.ListAttribute{
-				Description: "List of SSH key names to add to the VPS.",
+			"ssh_key_ids": schema.ListAttribute{
+				Description: "List of SSH key IDs to add to the VPS.",
 				Optional:    true,
-				ElementType: types.StringType,
+				ElementType: types.Int64Type,
 				PlanModifiers: []planmodifier.List{
 					listplanmodifier.RequiresReplace(),
 				},
@@ -144,7 +144,7 @@ func (r *vpsResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 			"password": schema.StringAttribute{
-				Description: "Root password for the VPS. Required if ssh_key_names is not provided.",
+				Description: "Root password for the VPS. Required if ssh_key_ids is not provided.",
 				Optional:    true,
 				Sensitive:   true,
 				Validators:  []validator.String{StrongPasswordValidator()},
@@ -263,13 +263,13 @@ func (r *vpsResource) Create(ctx context.Context, req resource.CreateRequest, re
 	}
 
 	// Validate that at least SSH keys or password is provided
-	hasSSHKeys := !plan.SSHKeyNames.IsNull() && len(plan.SSHKeyNames.Elements()) > 0
+	hasSSHKeys := !plan.SSHKeyIDs.IsNull() && len(plan.SSHKeyIDs.Elements()) > 0
 	hasPassword := !plan.Password.IsNull() && plan.Password.ValueString() != ""
 
 	if !hasSSHKeys && !hasPassword {
 		resp.Diagnostics.AddError(
 			"Missing Authentication",
-			"Either ssh_key_names or password must be provided",
+			"Either ssh_key_ids or password must be provided",
 		)
 		return
 	}
@@ -303,12 +303,12 @@ func (r *vpsResource) Create(ctx context.Context, req resource.CreateRequest, re
 	}
 
 	if hasSSHKeys {
-		var sshKeyNames []string
-		resp.Diagnostics.Append(plan.SSHKeyNames.ElementsAs(ctx, &sshKeyNames, false)...)
+		var sshKeyIDs []int
+		resp.Diagnostics.Append(plan.SSHKeyIDs.ElementsAs(ctx, &sshKeyIDs, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		createReq.SSHKeyNames = sshKeyNames
+		createReq.SSHKeyIDs = sshKeyIDs
 	}
 
 	if hasPassword {

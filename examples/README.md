@@ -19,7 +19,7 @@ If you already have SSH keys in your CubePath account, just reference them by na
 ```hcl
 resource "cubepath_vps" "web" {
   # ... other config ...
-  ssh_key_names = ["my-existing-key"]  # No need to create it
+  ssh_key_ids = [12]  # No need to create it
 }
 ```
 
@@ -36,7 +36,7 @@ resource "cubepath_ssh_key" "main" {
 
 resource "cubepath_vps" "web" {
   # ... other config ...
-  ssh_key_names = [cubepath_ssh_key.main.name]
+  ssh_key_ids = [tonumber(cubepath_ssh_key.main.id)]
 }
 ```
 

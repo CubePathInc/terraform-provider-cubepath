@@ -13,7 +13,7 @@ provider "cubepath" {}
 
 # Look up existing SSH key by name
 data "cubepath_ssh_key" "existing" {
-  name = "demo-terraform-key"  # Replace with your SSH key name
+  name = "demo-terraform-key" # Replace with your SSH key name
 }
 
 # Create project
@@ -31,7 +31,7 @@ resource "cubepath_vps" "web" {
   template_name = "debian-12"
 
   # Reference the existing SSH key
-  ssh_key_names = [data.cubepath_ssh_key.existing.name]
+  ssh_key_ids = [tonumber(data.cubepath_ssh_key.existing.id)]
 
   timeouts {
     create = "15m"

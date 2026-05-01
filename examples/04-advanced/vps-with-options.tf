@@ -61,11 +61,11 @@ resource "cubepath_vps" "full" {
   location      = "us-mia-1"
   plan_name     = "gp.nano"
   template_name = "debian-12"
-  ssh_key_names = [cubepath_ssh_key.main.name]
+  ssh_key_ids   = [tonumber(cubepath_ssh_key.main.id)]
 
   # New options
-  ipv4               = true   # Enable IPv4 (default: true, adds $1.50/month)
-  enable_backups     = true   # Enable automatic backups
+  ipv4               = true # Enable IPv4 (default: true, adds $1.50/month)
+  enable_backups     = true # Enable automatic backups
   firewall_group_ids = [cubepath_firewall_group.web.id]
 
   # Custom cloud-init configuration
@@ -91,9 +91,9 @@ resource "cubepath_vps" "ipv6_only" {
   location      = "us-mia-1"
   plan_name     = "gp.nano"
   template_name = "debian-12"
-  ssh_key_names = [cubepath_ssh_key.main.name]
+  ssh_key_ids   = [tonumber(cubepath_ssh_key.main.id)]
 
-  ipv4 = false  # IPv6 only (saves $1.50/month)
+  ipv4 = false # IPv6 only (saves $1.50/month)
 
   timeouts {
     create = "15m"

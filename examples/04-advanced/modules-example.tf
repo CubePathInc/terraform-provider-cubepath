@@ -75,7 +75,7 @@ resource "cubepath_vps" "app" {
   plan_name     = local.vps_plan
   template_name = "debian-12"
   network_id    = cubepath_network.main.id
-  ssh_key_names = [cubepath_ssh_key.main.name]
+  ssh_key_ids   = [tonumber(cubepath_ssh_key.main.id)]
 
   timeouts {
     create = "15m"

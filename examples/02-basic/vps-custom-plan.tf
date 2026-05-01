@@ -28,7 +28,7 @@ resource "cubepath_vps" "miami_small" {
   location      = "us-mia-1"
   plan_name     = "gp.nano"
   template_name = "debian-12"
-  ssh_key_names = [cubepath_ssh_key.main.name]
+  ssh_key_ids   = [tonumber(cubepath_ssh_key.main.id)]
 
   timeouts {
     create = "15m"
@@ -42,7 +42,7 @@ resource "cubepath_vps" "houston_medium" {
   location      = "us-hou-1"
   plan_name     = "gp.small"
   template_name = "ubuntu-22"
-  ssh_key_names = [cubepath_ssh_key.main.name]
+  ssh_key_ids   = [tonumber(cubepath_ssh_key.main.id)]
 
   timeouts {
     create = "15m"
@@ -56,7 +56,7 @@ resource "cubepath_vps" "barcelona_large" {
   location      = "eu-bcn-1"
   plan_name     = "gp.medium"
   template_name = "ubuntu-24"
-  ssh_key_names = [cubepath_ssh_key.main.name]
+  ssh_key_ids   = [tonumber(cubepath_ssh_key.main.id)]
 
   timeouts {
     create = "15m"

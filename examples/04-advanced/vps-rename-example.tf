@@ -32,12 +32,12 @@ resource "cubepath_project" "app" {
 # VPS - Try changing the name and running terraform apply
 # The VPS will be renamed, not destroyed and recreated
 resource "cubepath_vps" "web" {
-  name          = "web-server-v1"  # Change this to "web-server-v2" and apply
+  name          = "web-server-v1" # Change this to "web-server-v2" and apply
   project_id    = cubepath_project.app.id
   location      = "us-mia-1"
   plan_name     = "gp.nano"
   template_name = "debian-12"
-  ssh_key_names = [cubepath_ssh_key.demo.name]
+  ssh_key_ids   = [tonumber(cubepath_ssh_key.demo.id)]
 
   timeouts {
     create = "15m"

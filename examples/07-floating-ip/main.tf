@@ -22,7 +22,7 @@ resource "cubepath_vps" "web" {
   location      = "us-mia-1"
   plan_name     = "gp.pro"
   template_name = "debian-12"
-  ssh_key_names = ["my-key"]
+  ssh_key_ids   = [12]
 }
 
 # Acquire and assign a floating IP to the VPS

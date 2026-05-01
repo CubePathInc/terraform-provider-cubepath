@@ -27,7 +27,7 @@ resource "cubepath_vps" "simple" {
   template_name = "debian-12"
 
   # Reference existing SSH key by name (replace with your key name)
-  ssh_key_names = ["my-existing-key"]
+  ssh_key_ids = [12]
 
   timeouts {
     create = "15m"

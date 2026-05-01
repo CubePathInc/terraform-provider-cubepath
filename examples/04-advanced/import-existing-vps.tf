@@ -17,11 +17,11 @@ provider "cubepath" {}
 # terraform import cubepath_vps.existing <vps-id>
 resource "cubepath_vps" "existing" {
   name          = "existing-server"
-  project_id    = 123  # Replace with your project ID
+  project_id    = 123 # Replace with your project ID
   location      = "us-mia-1"
   plan_name     = "gp.pro"
   template_name = "debian-12"
-  ssh_key_names = ["my-key"]  # Replace with your SSH key name
+  ssh_key_ids   = [12] # Replace with your SSH key name
 
   timeouts {
     create = "15m"

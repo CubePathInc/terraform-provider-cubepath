@@ -33,7 +33,7 @@ resource "cubepath_vps" "web" {
   location      = "us-mia-1"
   plan_name     = "gp.nano"
   template_name = "debian-12"
-  ssh_key_names = [cubepath_ssh_key.main.name]
+  ssh_key_ids   = [tonumber(cubepath_ssh_key.main.id)]
 
   # Power state control
   # Set to "running" to start the VPS (default)
@@ -52,7 +52,7 @@ resource "cubepath_vps" "batch_worker" {
   location      = "us-mia-1"
   plan_name     = "gp.nano"
   template_name = "debian-12"
-  ssh_key_names = [cubepath_ssh_key.main.name]
+  ssh_key_ids   = [tonumber(cubepath_ssh_key.main.id)]
 
   # Start in stopped state - useful for batch jobs
   # Can be started later by changing to "running"

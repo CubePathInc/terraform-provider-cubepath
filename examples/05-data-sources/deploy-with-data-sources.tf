@@ -70,7 +70,7 @@ resource "cubepath_vps" "optimized" {
   location      = var.location
   plan_name     = local.selected_plan.plan_name
   template_name = "debian-12"
-  ssh_key_names = [cubepath_ssh_key.main.name]
+  ssh_key_ids   = [tonumber(cubepath_ssh_key.main.id)]
 
   timeouts {
     create = "15m"

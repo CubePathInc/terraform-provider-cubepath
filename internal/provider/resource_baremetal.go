@@ -46,7 +46,7 @@ type baremetalResourceModel struct {
 	DiskLayoutName   types.String   `tfsdk:"disk_layout_name"`
 	User             types.String   `tfsdk:"user"`
 	Password         types.String   `tfsdk:"password"`
-	SSHKeyNames      types.List     `tfsdk:"ssh_key_names"`
+	SSHKeyIDs        types.List     `tfsdk:"ssh_key_ids"`
 	MonitoringEnable types.Bool     `tfsdk:"monitoring_enable"`
 	PowerState       types.String   `tfsdk:"power_state"`
 	Status           types.String   `tfsdk:"status"`
@@ -139,10 +139,10 @@ func (r *baremetalResource) Schema(ctx context.Context, _ resource.SchemaRequest
 				Sensitive:   true,
 				Validators:  []validator.String{StrongPasswordValidator()},
 			},
-			"ssh_key_names": schema.ListAttribute{
-				Description: "List of SSH key names to add to the server.",
+			"ssh_key_ids": schema.ListAttribute{
+				Description: "List of SSH key IDs to add to the server.",
 				Optional:    true,
-				ElementType: types.StringType,
+				ElementType: types.Int64Type,
 				PlanModifiers: []planmodifier.List{
 					listplanmodifier.RequiresReplace(),
 				},
@@ -265,13 +265,13 @@ func (r *baremetalResource) Create(ctx context.Context, req resource.CreateReque
 		createReq.DiskLayoutName = plan.DiskLayoutName.ValueString()
 	}
 
-	if !plan.SSHKeyNames.IsNull() && len(plan.SSHKeyNames.Elements()) > 0 {
-		var sshKeyNames []string
-		resp.Diagnostics.Append(plan.SSHKeyNames.ElementsAs(ctx, &sshKeyNames, false)...)
+	if !plan.SSHKeyIDs.IsNull() && len(plan.SSHKeyIDs.Elements()) > 0 {
+		var sshKeyIDs []int
+		resp.Diagnostics.Append(plan.SSHKeyIDs.ElementsAs(ctx, &sshKeyIDs, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		createReq.SSHKeyNames = sshKeyNames
+		createReq.SSHKeyIDs = sshKeyIDs
 	}
 
 	// Deploy baremetal

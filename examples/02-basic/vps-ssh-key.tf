@@ -2,7 +2,7 @@
 # This example creates a new SSH key with Terraform
 #
 # Alternative: If you already have an SSH key in CubePath, you can use it directly:
-#   ssh_key_names = ["your-existing-key-name"]
+#   ssh_key_ids = [12]
 # (no need to create the cubepath_ssh_key resource)
 
 terraform {
@@ -33,7 +33,7 @@ resource "cubepath_vps" "web" {
   location      = "us-mia-1"
   plan_name     = "gp.pro"
   template_name = "debian-12"
-  ssh_key_names = [cubepath_ssh_key.main.name]
+  ssh_key_ids   = [tonumber(cubepath_ssh_key.main.id)]
 
   timeouts {
     create = "15m"
