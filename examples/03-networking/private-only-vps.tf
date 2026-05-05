@@ -43,8 +43,8 @@ resource "cubepath_vps" "db" {
   network_id    = cubepath_network.internal.id
   ssh_key_ids   = [tonumber(cubepath_ssh_key.main.id)]
 
-  ipv4 = false
-  ipv6 = false
+  ipv4         = false
+  ipv6_enabled = false
 
   timeouts {
     create = "15m"

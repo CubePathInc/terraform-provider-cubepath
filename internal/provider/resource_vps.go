@@ -49,7 +49,7 @@ type vpsResourceModel struct {
 	User                  types.String   `tfsdk:"user"`
 	Password              types.String   `tfsdk:"password"`
 	IPv4                  types.Bool     `tfsdk:"ipv4"`
-	IPv6                  types.Bool     `tfsdk:"ipv6"`
+	IPv6Enabled           types.Bool     `tfsdk:"ipv6_enabled"`
 	EnableBackups         types.Bool     `tfsdk:"enable_backups"`
 	CustomCloudInit       types.String   `tfsdk:"custom_cloudinit"`
 	FirewallGroupIDs      types.List     `tfsdk:"firewall_group_ids"`
@@ -57,7 +57,7 @@ type vpsResourceModel struct {
 	PowerState            types.String   `tfsdk:"power_state"`
 	Status                types.String   `tfsdk:"status"`
 	MainIP                types.String   `tfsdk:"main_ip"`
-	IPv6Address           types.String   `tfsdk:"ipv6_address"`
+	IPv6                  types.String   `tfsdk:"ipv6"`
 	PrivateIP             types.String   `tfsdk:"private_ip"`
 	VCPUs                 types.Int64    `tfsdk:"vcpus"`
 	RAM                   types.Int64    `tfsdk:"ram"`
@@ -158,7 +158,7 @@ func (r *vpsResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp
 					boolplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"ipv6": schema.BoolAttribute{
+			"ipv6_enabled": schema.BoolAttribute{
 				Description: "Enable public IPv6 address (free). Defaults to true. Set to false to deploy without any public IP — requires network_id.",
 				Optional:    true,
 				Computed:    true,
@@ -209,8 +209,8 @@ func (r *vpsResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp
 				Description: "The main public IPv4 address of the VPS.",
 				Computed:    true,
 			},
-			"ipv6_address": schema.StringAttribute{
-				Description: "The public IPv6 address of the VPS (read-only). Empty when ipv6 is disabled.",
+			"ipv6": schema.StringAttribute{
+				Description: "The public IPv6 address of the VPS (read-only). Empty when ipv6_enabled is false.",
 				Computed:    true,
 			},
 			"private_ip": schema.StringAttribute{
@@ -339,8 +339,8 @@ func (r *vpsResource) Create(ctx context.Context, req resource.CreateRequest, re
 	}
 
 	// IPv6 configuration (defaults to true if not specified). When false, network_id must be set.
-	if !plan.IPv6.IsNull() {
-		ipv6 := plan.IPv6.ValueBool()
+	if !plan.IPv6Enabled.IsNull() {
+		ipv6 := plan.IPv6Enabled.ValueBool()
 		createReq.IPv6 = &ipv6
 	} else {
 		ipv6 := true
@@ -665,7 +665,7 @@ func (r *vpsResource) updateStateFromVPS(ctx context.Context, state *vpsResource
 	state.Name = types.StringValue(vps.Name)
 	state.Label = types.StringValue(vps.Label)
 	state.Status = types.StringValue(vps.Status)
-	state.IPv6Address = types.StringValue(vps.IPv6)
+	state.IPv6 = types.StringValue(vps.IPv6)
 	state.CreatedAt = types.StringValue(vps.CreatedAt.String())
 
 	// Resource configuration fields
