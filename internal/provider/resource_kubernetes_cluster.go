@@ -47,6 +47,8 @@ type kubernetesClusterResourceModel struct {
 	NodeCIDR         types.String `tfsdk:"node_cidr"`
 	PodCIDR          types.String `tfsdk:"pod_cidr"`
 	ServiceCIDR      types.String `tfsdk:"service_cidr"`
+	AllocateIPv4     types.Bool   `tfsdk:"allocate_ipv4"`
+	AllocateIPv6     types.Bool   `tfsdk:"allocate_ipv6"`
 	Status           types.String `tfsdk:"status"`
 	APIEndpoint      types.String `tfsdk:"api_endpoint"`
 	CreatedAt        types.String `tfsdk:"created_at"`
@@ -153,6 +155,24 @@ func (r *kubernetesClusterResource) Schema(_ context.Context, _ resource.SchemaR
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			"allocate_ipv4": schema.BoolAttribute{
+				Description: "Whether to allocate a public IPv4 address to cluster nodes. Defaults to true. Requires replacement if changed.",
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(true),
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplace(),
+				},
+			},
+			"allocate_ipv6": schema.BoolAttribute{
+				Description: "Whether to allocate a public IPv6 address to cluster nodes. Defaults to true. Requires replacement if changed.",
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(true),
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplace(),
+				},
+			},
 			"status": schema.StringAttribute{
 				Description: "Current status of the cluster.",
 				Computed:    true,
@@ -210,6 +230,15 @@ func (r *kubernetesClusterResource) Create(ctx context.Context, req resource.Cre
 
 	if !plan.Version.IsNull() && !plan.Version.IsUnknown() {
 		createReq.Version = plan.Version.ValueString()
+	}
+
+	if !plan.AllocateIPv4.IsNull() && !plan.AllocateIPv4.IsUnknown() {
+		v := plan.AllocateIPv4.ValueBool()
+		createReq.AllocateIPv4 = &v
+	}
+	if !plan.AllocateIPv6.IsNull() && !plan.AllocateIPv6.IsUnknown() {
+		v := plan.AllocateIPv6.ValueBool()
+		createReq.AllocateIPv6 = &v
 	}
 
 	// Build network config

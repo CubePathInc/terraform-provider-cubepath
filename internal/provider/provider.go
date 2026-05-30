@@ -36,14 +36,14 @@ type cubePathProvider struct {
 
 // cubePathProviderModel maps provider schema data to a Go type.
 type cubePathProviderModel struct {
-	APIToken  types.String `tfsdk:"api_token"`
-	BaseURL   types.String `tfsdk:"base_url"`
+	APIToken types.String `tfsdk:"api_token"`
+	BaseURL  types.String `tfsdk:"base_url"`
 
 	// Timeouts
-	DefaultTimeout          types.Int64 `tfsdk:"default_timeout"`
-	VPSCreateTimeout        types.Int64 `tfsdk:"vps_create_timeout"`
-	VPSDestroyTimeout       types.Int64 `tfsdk:"vps_destroy_timeout"`
-	BaremetalDeployTimeout  types.Int64 `tfsdk:"baremetal_deploy_timeout"`
+	DefaultTimeout         types.Int64 `tfsdk:"default_timeout"`
+	VPSCreateTimeout       types.Int64 `tfsdk:"vps_create_timeout"`
+	VPSDestroyTimeout      types.Int64 `tfsdk:"vps_destroy_timeout"`
+	BaremetalDeployTimeout types.Int64 `tfsdk:"baremetal_deploy_timeout"`
 
 	// Retry configuration
 	MaxRetries   types.Int64 `tfsdk:"max_retries"`
@@ -175,6 +175,7 @@ func (p *cubePathProvider) DataSources(_ context.Context) []func() datasource.Da
 		NewKubernetesAddonsDataSource,
 		NewKubeconfigDataSource,
 		NewAvailabilityGroupsDataSource,
+		NewNATGatewayPlansDataSource,
 	}
 }
 
@@ -200,5 +201,7 @@ func (p *cubePathProvider) Resources(_ context.Context) []func() resource.Resour
 		NewKubernetesNodePoolResource,
 		NewKubernetesAddonResource,
 		NewAvailabilityGroupResource,
+		NewNATGatewayResource,
+		NewNetworkRouteResource,
 	}
 }

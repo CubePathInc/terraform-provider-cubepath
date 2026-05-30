@@ -4,18 +4,18 @@ import "encoding/json"
 
 // LoadBalancer represents a load balancer
 type LoadBalancer struct {
-	UUID             string          `json:"uuid"`
-	Name             string          `json:"name"`
-	Label            string          `json:"label"`
-	Status           string          `json:"status"`
-	LocationName     string          `json:"location_name"`
-	Plan             *LBPlan         `json:"plan,omitempty"`
-	PlanName         string          `json:"plan_name"`
-	FloatingIPs      []LBFloatingIP  `json:"floating_ips"`
-	Listeners        []LBListener    `json:"listeners"`
-	ListenersCount   int             `json:"listeners_count"`
-	ProjectID        int             `json:"project_id"`
-	CreatedAt        string          `json:"created_at"`
+	UUID           string         `json:"uuid"`
+	Name           string         `json:"name"`
+	Label          string         `json:"label"`
+	Status         string         `json:"status"`
+	LocationName   string         `json:"location_name"`
+	Plan           *LBPlan        `json:"plan,omitempty"`
+	PlanName       string         `json:"plan_name"`
+	FloatingIPs    []LBFloatingIP `json:"floating_ips"`
+	Listeners      []LBListener   `json:"listeners"`
+	ListenersCount int            `json:"listeners_count"`
+	ProjectID      int            `json:"project_id"`
+	CreatedAt      string         `json:"created_at"`
 }
 
 // LBPlan represents a load balancer plan
@@ -86,6 +86,7 @@ type CreateLoadBalancerRequest struct {
 	LocationName string `json:"location_name"`
 	ProjectID    *int   `json:"project_id,omitempty"`
 	Label        string `json:"label,omitempty"`
+	NetworkID    *int   `json:"network_id,omitempty"`
 }
 
 // UpdateLoadBalancerRequest represents a request to update a load balancer

@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -35,6 +36,7 @@ type loadBalancerResourceModel struct {
 	PlanName     types.String `tfsdk:"plan_name"`
 	LocationName types.String `tfsdk:"location_name"`
 	ProjectID    types.Int64  `tfsdk:"project_id"`
+	NetworkID    types.Int64  `tfsdk:"network_id"`
 	Status       types.String `tfsdk:"status"`
 	IPAddress    types.String `tfsdk:"ip_address"`
 	CreatedAt    types.String `tfsdk:"created_at"`
@@ -79,6 +81,13 @@ func (r *loadBalancerResource) Schema(_ context.Context, _ resource.SchemaReques
 				Description: "The project ID. Uses default project if not specified.",
 				Optional:    true,
 				Computed:    true,
+			},
+			"network_id": schema.Int64Attribute{
+				Description: "The private network ID to attach the load balancer to. Requires replacement if changed.",
+				Optional:    true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
+				},
 			},
 			"status": schema.StringAttribute{
 				Description: "Current status of the load balancer.",
@@ -127,6 +136,10 @@ func (r *loadBalancerResource) Create(ctx context.Context, req resource.CreateRe
 	}
 	if !plan.Label.IsNull() && !plan.Label.IsUnknown() {
 		createReq.Label = plan.Label.ValueString()
+	}
+	if !plan.NetworkID.IsNull() && !plan.NetworkID.IsUnknown() {
+		nid := int(plan.NetworkID.ValueInt64())
+		createReq.NetworkID = &nid
 	}
 
 	lb, err := r.client.LoadBalancer.Create(ctx, createReq)

@@ -4,20 +4,20 @@ import "encoding/json"
 
 // KubernetesCluster represents a Kubernetes cluster
 type KubernetesCluster struct {
-	UUID           string              `json:"uuid"`
-	Name           string              `json:"name"`
-	Label          string              `json:"label"`
-	Status         string              `json:"status"`
-	Version        string              `json:"version"`
-	HAControlPlane bool                `json:"ha_control_plane"`
-	APIEndpoint    string              `json:"api_endpoint"`
-	PodCIDR        string              `json:"pod_cidr"`
-	ServiceCIDR    string              `json:"service_cidr"`
-	BillingType    string              `json:"billing_type"`
-	Location       KubernetesLocation  `json:"location"`
-	Network        *KubernetesNetwork  `json:"network,omitempty"`
+	UUID           string               `json:"uuid"`
+	Name           string               `json:"name"`
+	Label          string               `json:"label"`
+	Status         string               `json:"status"`
+	Version        string               `json:"version"`
+	HAControlPlane bool                 `json:"ha_control_plane"`
+	APIEndpoint    string               `json:"api_endpoint"`
+	PodCIDR        string               `json:"pod_cidr"`
+	ServiceCIDR    string               `json:"service_cidr"`
+	BillingType    string               `json:"billing_type"`
+	Location       KubernetesLocation   `json:"location"`
+	Network        *KubernetesNetwork   `json:"network,omitempty"`
 	NodePools      []KubernetesNodePool `json:"node_pools"`
-	CreatedAt      string              `json:"created_at"`
+	CreatedAt      string               `json:"created_at"`
 }
 
 // KubernetesLocation represents a cluster location
@@ -35,16 +35,16 @@ type KubernetesNetwork struct {
 
 // KubernetesNodePool represents a node pool in a cluster
 type KubernetesNodePool struct {
-	UUID         string            `json:"uuid"`
-	Name         string            `json:"name"`
-	DesiredNodes int               `json:"desired_nodes"`
-	MinNodes     int               `json:"min_nodes"`
-	MaxNodes     int               `json:"max_nodes"`
-	AutoScale    bool              `json:"auto_scale"`
+	UUID         string             `json:"uuid"`
+	Name         string             `json:"name"`
+	DesiredNodes int                `json:"desired_nodes"`
+	MinNodes     int                `json:"min_nodes"`
+	MaxNodes     int                `json:"max_nodes"`
+	AutoScale    bool               `json:"auto_scale"`
 	Plan         KubernetesNodePlan `json:"plan"`
-	Labels       map[string]string `json:"labels,omitempty"`
-	Taints       []KubernetesTaint `json:"taints,omitempty"`
-	Nodes        []KubernetesNode  `json:"nodes"`
+	Labels       map[string]string  `json:"labels,omitempty"`
+	Taints       []KubernetesTaint  `json:"taints,omitempty"`
+	Nodes        []KubernetesNode   `json:"nodes"`
 }
 
 // KubernetesNodePlan represents the plan of a node pool
@@ -105,22 +105,24 @@ type KubernetesAddon struct {
 
 // KubernetesInstalledAddon represents an addon installed on a cluster
 type KubernetesInstalledAddon struct {
-	UUID             string           `json:"uuid"`
-	Status           string           `json:"status"`
-	InstalledVersion string           `json:"installed_version"`
-	Addon            KubernetesAddon  `json:"addon"`
-	InstalledAt      string           `json:"installed_at"`
+	UUID             string          `json:"uuid"`
+	Status           string          `json:"status"`
+	InstalledVersion string          `json:"installed_version"`
+	Addon            KubernetesAddon `json:"addon"`
+	InstalledAt      string          `json:"installed_at"`
 }
 
 // CreateKubernetesClusterRequest represents a request to create a cluster
 type CreateKubernetesClusterRequest struct {
-	ProjectID      int                          `json:"project_id"`
-	Name           string                       `json:"name"`
-	LocationName   string                       `json:"location_name"`
-	HAControlPlane bool                         `json:"ha_control_plane"`
-	Version        string                       `json:"version,omitempty"`
+	ProjectID      int                           `json:"project_id"`
+	Name           string                        `json:"name"`
+	LocationName   string                        `json:"location_name"`
+	HAControlPlane bool                          `json:"ha_control_plane"`
+	Version        string                        `json:"version,omitempty"`
 	NodePools      []CreateNodePoolInlineRequest `json:"node_pools"`
-	Network        *ClusterNetworkRequest       `json:"network,omitempty"`
+	Network        *ClusterNetworkRequest        `json:"network,omitempty"`
+	AllocateIPv4   *bool                         `json:"allocate_ipv4,omitempty"`
+	AllocateIPv6   *bool                         `json:"allocate_ipv6,omitempty"`
 }
 
 // CreateNodePoolInlineRequest is the inline node pool in cluster creation

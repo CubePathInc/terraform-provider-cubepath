@@ -42,6 +42,8 @@ type Client struct {
 	CDN                *CDNService
 	Kubernetes         *KubernetesService
 	AvailabilityGroups *AvailabilityGroups
+	NATGateway         *NATGatewayService
+	NetworkRoutes      *NetworkRouteService
 }
 
 // ClientOption is a function that configures a Client
@@ -125,6 +127,8 @@ func NewClient(apiToken, baseURL string, opts ...ClientOption) (*Client, error) 
 	client.CDN = NewCDNService(client)
 	client.Kubernetes = NewKubernetesService(client)
 	client.AvailabilityGroups = NewAvailabilityGroups(client)
+	client.NATGateway = NewNATGatewayService(client)
+	client.NetworkRoutes = NewNetworkRouteService(client)
 
 	return client, nil
 }
