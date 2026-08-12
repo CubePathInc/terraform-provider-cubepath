@@ -329,8 +329,16 @@ func (r *vpsResource) Create(ctx context.Context, req resource.CreateRequest, re
 		createReq.User = plan.User.ValueString()
 	}
 
-	// IPv4 configuration (defaults to true if not specified)
-	if !plan.IPv4.IsNull() {
+	// IPv4 configuration (defaults to true if not specified).
+	//
+	// Both attributes are Optional+Computed, so an unset value arrives at Create
+	// as UNKNOWN, not null. IsNull() alone is therefore false for the very case
+	// this branch exists to handle, and ValueBool() on an unknown Bool returns
+	// the zero value — so leaving these unset asked for a server with no public
+	// IPv4 AND no public IPv6, which the API rejects with "Disabling public IPv6
+	// requires a private network so the server has at least private IPv4
+	// connectivity." Unknown must fall through to the documented default.
+	if !plan.IPv4.IsNull() && !plan.IPv4.IsUnknown() {
 		ipv4 := plan.IPv4.ValueBool()
 		createReq.IPv4 = &ipv4
 	} else {
@@ -339,7 +347,7 @@ func (r *vpsResource) Create(ctx context.Context, req resource.CreateRequest, re
 	}
 
 	// IPv6 configuration (defaults to true if not specified). When false, network_id must be set.
-	if !plan.IPv6Enabled.IsNull() {
+	if !plan.IPv6Enabled.IsNull() && !plan.IPv6Enabled.IsUnknown() {
 		ipv6 := plan.IPv6Enabled.ValueBool()
 		createReq.IPv6 = &ipv6
 	} else {
@@ -696,12 +704,17 @@ func (r *vpsResource) updateStateFromVPS(ctx context.Context, state *vpsResource
 		List []client.FloatingIP `json:"list"`
 	}
 	hasIPv4 := false
+	hasIPv6 := false
 	if err := json.Unmarshal(vps.FloatingIPs, &floatingIPsResp); err == nil {
 		for _, ip := range floatingIPsResp.List {
-			if ip.Type == "IPv4" {
-				state.MainIP = types.StringValue(ip.Address)
+			switch ip.Type {
+			case "IPv4":
+				if !hasIPv4 {
+					state.MainIP = types.StringValue(ip.Address)
+				}
 				hasIPv4 = true
-				break
+			case "IPv6":
+				hasIPv6 = true
 			}
 		}
 	}
@@ -711,6 +724,14 @@ func (r *vpsResource) updateStateFromVPS(ctx context.Context, state *vpsResource
 
 	// Set IPv4 based on whether VPS has an IPv4 address
 	state.IPv4 = types.BoolValue(hasIPv4)
+
+	// ipv6_enabled is Optional+Computed, so it MUST be known after apply or
+	// Terraform aborts with "Provider returned invalid result object after
+	// apply ... always a bug in the provider" — which it did, leaving a created
+	// VPS reported as a failed apply. Derive it the same way ipv4 is derived,
+	// falling back to the read-only address when the floating-IP list carries
+	// no v6 entry.
+	state.IPv6Enabled = types.BoolValue(hasIPv6 || vps.IPv6 != "")
 
 	// EnableBackups and CustomCloudInit are write-only, preserve from state if not null/unknown
 	if state.EnableBackups.IsNull() || state.EnableBackups.IsUnknown() {
