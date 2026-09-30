@@ -60,16 +60,6 @@ func (b *BaremetalService) Update(ctx context.Context, baremetalID int, req *Upd
 	return nil
 }
 
-// Destroy cancels/terminates a baremetal server
-func (b *BaremetalService) Destroy(ctx context.Context, baremetalID int) (*TaskResponse, error) {
-	var result TaskResponse
-	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/cancel/%d", baremetalID), nil, &result)
-	if err != nil {
-		return nil, fmt.Errorf("failed to cancel baremetal: %w", err)
-	}
-	return &result, nil
-}
-
 // Power sends a power control command to a baremetal server
 // powerType can be: start_metal, stop_metal, restart_metal
 func (b *BaremetalService) Power(ctx context.Context, baremetalID int, powerType string) (*TaskResponse, error) {
@@ -166,28 +156,4 @@ func (b *BaremetalService) WaitForBaremetalStatus(ctx context.Context, baremetal
 	}
 
 	return result.(*Baremetal), nil
-}
-
-// WaitForBaremetalDestroy waits for a baremetal to be destroyed
-func (b *BaremetalService) WaitForBaremetalDestroy(ctx context.Context, baremetalID int, timeout time.Duration) error {
-	stateConf := &utils.StateChangeConf{
-		Pending: []string{"running", "stopped", "stopping", "cancelling", "active"},
-		Target:  []string{"deleted", "cancelled"},
-		Refresh: func() (interface{}, string, error) {
-			_, err := b.Get(ctx, baremetalID)
-			if err != nil {
-				if apiErr, ok := err.(*APIError); ok && apiErr.IsNotFound() {
-					return nil, "deleted", nil
-				}
-				return nil, "", err
-			}
-			return nil, "cancelling", nil
-		},
-		Timeout:      timeout,
-		PollInterval: 30 * time.Second,
-		MinTimeout:   10 * time.Second,
-	}
-
-	_, err := stateConf.WaitForState(ctx)
-	return err
 }

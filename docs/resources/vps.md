@@ -18,7 +18,7 @@ Manages a VPS instance on CubePath Cloud.
 ### Required
 
 - `location` (String) The location where the VPS will be created (e.g., 'us-mia-1').
-- `name` (String) The hostname of the VPS.
+- `name` (String) The hostname of the VPS. Can be changed in place.
 - `plan_name` (String) The plan name for the VPS (e.g., 'gp.pro').
 - `project_id` (Number) The project ID to associate the VPS with.
 - `template_name` (String) The operating system template (e.g., 'debian-12').
@@ -31,7 +31,7 @@ Manages a VPS instance on CubePath Cloud.
 - `firewall_group_ids` (Set of Number) Set of firewall group IDs to assign to this VPS. If omitted, firewall groups are not managed by Terraform.
 - `ipv4` (Boolean) Enable public IPv4 address (dual-stack). Additional $1.50/month. Defaults to true.
 - `ipv6_enabled` (Boolean) Enable public IPv6 address (free). Defaults to true. Set to false to deploy without any public IP — requires network_id.
-- `label` (String) A label for the VPS.
+- `label` (String) A label for the VPS. Can be changed in place.
 - `network_id` (Number) Optional private network ID to attach to the VPS.
 - `password` (String, Sensitive) Root password for the VPS. Required if ssh_key_ids is not provided.
 - `power_state` (String) Desired power state of the VPS. Valid values: 'running', 'stopped'. Changing this will start or stop the VPS.

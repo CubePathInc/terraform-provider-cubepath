@@ -66,7 +66,7 @@ func (r *baremetalResource) Metadata(_ context.Context, req resource.MetadataReq
 
 func (r *baremetalResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages a Baremetal server on CubePath Cloud.",
+		Description: "Manages a Baremetal server on CubePath Cloud. Destroying this resource (terraform destroy, or removing it from the configuration) only removes it from the Terraform state: the server is still running and billed, and has to be cancelled from the CubePath dashboard.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description: "The unique identifier of the Baremetal server.",
@@ -494,6 +494,11 @@ func (r *baremetalResource) Update(ctx context.Context, req resource.UpdateReque
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
+// BaremetalDestroyWarning is shown when a baremetal leaves the Terraform state. Destroying a
+// dedicated server is never done from Terraform: a mistaken destroy must not cancel hardware.
+const BaremetalDestroyWarning = "The server is still running and billed; cancel it from the CubePath dashboard."
+
+// Delete only removes the baremetal from the Terraform state. The server itself is not touched.
 func (r *baremetalResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state baremetalResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -501,42 +506,10 @@ func (r *baremetalResource) Delete(ctx context.Context, req resource.DeleteReque
 		return
 	}
 
-	deleteTimeout, diags := state.Timeouts.Delete(ctx, 10*time.Minute)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	deleteCtx, cancel := context.WithTimeout(ctx, deleteTimeout)
-	defer cancel()
-
-	id, err := strconv.Atoi(state.ID.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error parsing Baremetal ID",
-			"Could not parse Baremetal ID: "+err.Error(),
-		)
-		return
-	}
-
-	_, err = r.client.Baremetal.Destroy(deleteCtx, id)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error destroying Baremetal",
-			"Could not destroy Baremetal: "+err.Error(),
-		)
-		return
-	}
-
-	// Wait for baremetal to be destroyed
-	err = r.client.Baremetal.WaitForBaremetalDestroy(deleteCtx, id, deleteTimeout)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Timeout waiting for Baremetal deletion",
-			"Baremetal destroy was initiated but did not complete: "+err.Error(),
-		)
-		return
-	}
+	resp.Diagnostics.AddWarning(
+		"Baremetal "+state.ID.ValueString()+" removed from state only",
+		BaremetalDestroyWarning,
+	)
 }
 
 func (r *baremetalResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
