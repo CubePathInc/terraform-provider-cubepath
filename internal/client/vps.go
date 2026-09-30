@@ -39,6 +39,10 @@ func (v *VPSService) Get(ctx context.Context, vpsID int) (*VPS, error) {
 	for _, projectResp := range projects {
 		for _, vps := range projectResp.VPS {
 			if vps.ID == vpsID {
+				// project_id is not included in the nested VPS objects
+				if vps.ProjectID == 0 {
+					vps.ProjectID = projectResp.Project.ID
+				}
 				return &vps, nil
 			}
 		}
