@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     cubepath = {
-      source = "cubepath/cubepath"
+      source = "cubepathinc/cubepath"
     }
   }
 }
