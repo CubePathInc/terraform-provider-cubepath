@@ -37,7 +37,7 @@ func retryWhile(ctx context.Context, timeout, interval time.Duration, retry func
 		}
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return fmt.Errorf("%w; last answer from the API: %v", ctx.Err(), err)
 		case <-time.After(interval):
 		}
 	}
