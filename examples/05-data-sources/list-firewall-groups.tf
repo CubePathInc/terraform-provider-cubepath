@@ -5,8 +5,8 @@
 terraform {
   required_providers {
     cubepath = {
-      source  = "cubepath/cubepath"
-      version = "~> 1.0"
+      source  = "cubepathinc/cubepath"
+      version = "~> 0.6"
     }
   }
 }
