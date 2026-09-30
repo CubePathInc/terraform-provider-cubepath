@@ -15,8 +15,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -45,14 +45,14 @@ type vpsResourceModel struct {
 	PlanName              types.String   `tfsdk:"plan_name"`
 	TemplateName          types.String   `tfsdk:"template_name"`
 	NetworkID             types.Int64    `tfsdk:"network_id"`
-	SSHKeyIDs             types.List     `tfsdk:"ssh_key_ids"`
+	SSHKeyIDs             types.Set      `tfsdk:"ssh_key_ids"`
 	User                  types.String   `tfsdk:"user"`
 	Password              types.String   `tfsdk:"password"`
 	IPv4                  types.Bool     `tfsdk:"ipv4"`
 	IPv6Enabled           types.Bool     `tfsdk:"ipv6_enabled"`
 	EnableBackups         types.Bool     `tfsdk:"enable_backups"`
 	CustomCloudInit       types.String   `tfsdk:"custom_cloudinit"`
-	FirewallGroupIDs      types.List     `tfsdk:"firewall_group_ids"`
+	FirewallGroupIDs      types.Set      `tfsdk:"firewall_group_ids"`
 	AvailabilityGroupUUID types.String   `tfsdk:"availability_group_uuid"`
 	PowerState            types.String   `tfsdk:"power_state"`
 	Status                types.String   `tfsdk:"status"`
@@ -123,16 +123,24 @@ func (r *vpsResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp
 			"network_id": schema.Int64Attribute{
 				Description: "Optional private network ID to attach to the VPS.",
 				Optional:    true,
+				Computed:    true,
 				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.RequiresReplace(),
+					int64planmodifier.UseStateForUnknown(),
+					int64planmodifier.RequiresReplaceIf(requiresReplaceIfConfiguredInt64,
+						"Changing the network requires replacing the VPS.",
+						"Changing the network requires replacing the VPS."),
 				},
 			},
-			"ssh_key_ids": schema.ListAttribute{
-				Description: "List of SSH key IDs to add to the VPS.",
+			"ssh_key_ids": schema.SetAttribute{
+				Description: "Set of SSH key IDs to add to the VPS.",
 				Optional:    true,
+				Computed:    true,
 				ElementType: types.Int64Type,
-				PlanModifiers: []planmodifier.List{
-					listplanmodifier.RequiresReplace(),
+				PlanModifiers: []planmodifier.Set{
+					setplanmodifier.UseStateForUnknown(),
+					setplanmodifier.RequiresReplaceIf(requiresReplaceIfConfiguredSet,
+						"Changing the SSH keys requires replacing the VPS.",
+						"Changing the SSH keys requires replacing the VPS."),
 				},
 			},
 			"user": schema.StringAttribute{
@@ -175,22 +183,34 @@ func (r *vpsResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 			"custom_cloudinit": schema.StringAttribute{
-				Description: "Custom cloud-init configuration (YAML). Only for Linux templates.",
+				Description: "Custom cloud-init configuration (YAML). Only for Linux templates. The API does not return it, so it is not read back on import.",
 				Optional:    true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					// Not readable from the API: after an import the state is null,
+					// so only force replacement when a previously known value changes.
+					stringplanmodifier.RequiresReplaceIf(requiresReplaceIfKnownInState,
+						"Changing custom_cloudinit requires replacing the VPS.",
+						"Changing custom_cloudinit requires replacing the VPS."),
 				},
 			},
-			"firewall_group_ids": schema.ListAttribute{
-				Description: "List of firewall group IDs to assign to this VPS.",
+			"firewall_group_ids": schema.SetAttribute{
+				Description: "Set of firewall group IDs to assign to this VPS. If omitted, firewall groups are not managed by Terraform.",
 				Optional:    true,
+				Computed:    true,
 				ElementType: types.Int64Type,
+				PlanModifiers: []planmodifier.Set{
+					setplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"availability_group_uuid": schema.StringAttribute{
 				Description: "UUID of the availability group to place this VPS in. VPS in the same availability group are distributed across different physical hosts.",
 				Optional:    true,
+				Computed:    true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.RequiresReplaceIf(requiresReplaceIfConfiguredString,
+						"Changing the availability group requires replacing the VPS.",
+						"Changing the availability group requires replacing the VPS."),
 				},
 			},
 			"power_state": schema.StringAttribute{
@@ -306,7 +326,7 @@ func (r *vpsResource) Create(ctx context.Context, req resource.CreateRequest, re
 		createReq.Label = createReq.Name
 	}
 
-	if !plan.NetworkID.IsNull() {
+	if !plan.NetworkID.IsNull() && !plan.NetworkID.IsUnknown() {
 		networkID := int(plan.NetworkID.ValueInt64())
 		createReq.NetworkID = &networkID
 	}
@@ -356,7 +376,7 @@ func (r *vpsResource) Create(ctx context.Context, req resource.CreateRequest, re
 	}
 
 	// Backups configuration
-	if !plan.EnableBackups.IsNull() {
+	if !plan.EnableBackups.IsNull() && !plan.EnableBackups.IsUnknown() {
 		backups := plan.EnableBackups.ValueBool()
 		createReq.EnableBackups = &backups
 	}
@@ -436,7 +456,7 @@ func (r *vpsResource) Create(ctx context.Context, req resource.CreateRequest, re
 	}
 
 	// Update state
-	r.updateStateFromVPS(ctx, &plan, vps, &resp.Diagnostics)
+	r.updateStateFromVPS(ctx, &plan, vps, false, &resp.Diagnostics)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
@@ -471,7 +491,7 @@ func (r *vpsResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 		return
 	}
 
-	r.updateStateFromVPS(ctx, &state, vps, &resp.Diagnostics)
+	r.updateStateFromVPS(ctx, &state, vps, true, &resp.Diagnostics)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -535,7 +555,7 @@ func (r *vpsResource) Update(ctx context.Context, req resource.UpdateRequest, re
 	}
 
 	// Check if firewall groups changed
-	if !plan.FirewallGroupIDs.Equal(state.FirewallGroupIDs) {
+	if !plan.FirewallGroupIDs.IsUnknown() && !plan.FirewallGroupIDs.Equal(state.FirewallGroupIDs) {
 		var groupIDs []int
 		if !plan.FirewallGroupIDs.IsNull() {
 			resp.Diagnostics.Append(plan.FirewallGroupIDs.ElementsAs(ctx, &groupIDs, false)...)
@@ -614,7 +634,7 @@ func (r *vpsResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		return
 	}
 
-	r.updateStateFromVPS(ctx, &plan, vps, &resp.Diagnostics)
+	r.updateStateFromVPS(ctx, &plan, vps, false, &resp.Diagnostics)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
@@ -668,7 +688,11 @@ func (r *vpsResource) ImportState(ctx context.Context, req resource.ImportStateR
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func (r *vpsResource) updateStateFromVPS(ctx context.Context, state *vpsResourceModel, vps *client.VPS, diags *diag.Diagnostics) {
+// updateStateFromVPS copies the API view of a VPS into state. refresh is true
+// when called from Read: then firewall_group_ids is always taken from the API
+// so out-of-band changes show up as drift. Create-only attributes are only
+// filled in when unknown or null (e.g. after an import), never overwritten.
+func (r *vpsResource) updateStateFromVPS(ctx context.Context, state *vpsResourceModel, vps *client.VPS, refresh bool, diags *diag.Diagnostics) {
 	state.ID = types.StringValue(strconv.Itoa(vps.ID))
 	state.Name = types.StringValue(vps.Name)
 	state.Label = types.StringValue(vps.Label)
@@ -733,9 +757,10 @@ func (r *vpsResource) updateStateFromVPS(ctx context.Context, state *vpsResource
 	// no v6 entry.
 	state.IPv6Enabled = types.BoolValue(hasIPv6 || vps.IPv6 != "")
 
-	// EnableBackups and CustomCloudInit are write-only, preserve from state if not null/unknown
+	// CustomCloudInit is write-only and kept from state. EnableBackups is only
+	// taken from the API when it isn't known yet (unset in config, or import).
 	if state.EnableBackups.IsNull() || state.EnableBackups.IsUnknown() {
-		state.EnableBackups = types.BoolValue(false)
+		state.EnableBackups = types.BoolValue(vps.BackupEnabled)
 	}
 
 	// Set PowerState based on VPS status
@@ -758,4 +783,94 @@ func (r *vpsResource) updateStateFromVPS(ctx context.Context, state *vpsResource
 	} else {
 		state.PrivateIP = types.StringNull()
 	}
+
+	if state.NetworkID.IsNull() || state.NetworkID.IsUnknown() {
+		if vps.Network != nil && vps.Network.ID != 0 {
+			state.NetworkID = types.Int64Value(int64(vps.Network.ID))
+		} else {
+			state.NetworkID = types.Int64Null()
+		}
+	}
+
+	if state.SSHKeyIDs.IsNull() || state.SSHKeyIDs.IsUnknown() {
+		ids := make([]int64, 0, len(vps.SSHKeys))
+		for _, key := range vps.SSHKeys {
+			ids = append(ids, int64(key.ID))
+		}
+		state.SSHKeyIDs = int64SetOrNull(ctx, ids, state.SSHKeyIDs, diags)
+	}
+
+	if refresh || state.FirewallGroupIDs.IsNull() || state.FirewallGroupIDs.IsUnknown() {
+		ids := make([]int64, 0, len(vps.FirewallGroups))
+		for _, group := range vps.FirewallGroups {
+			ids = append(ids, int64(group.ID))
+		}
+		state.FirewallGroupIDs = int64SetOrNull(ctx, ids, state.FirewallGroupIDs, diags)
+	}
+
+	if state.AvailabilityGroupUUID.IsNull() || state.AvailabilityGroupUUID.IsUnknown() {
+		state.AvailabilityGroupUUID = r.findAvailabilityGroup(ctx, state.ProjectID, vps.ID, diags)
+	}
+}
+
+// findAvailabilityGroup returns the UUID of the availability group containing
+// the VPS, or null. The VPS payload does not include it, so the project's
+// groups are searched instead.
+func (r *vpsResource) findAvailabilityGroup(ctx context.Context, projectID types.Int64, vpsID int, diags *diag.Diagnostics) types.String {
+	if projectID.IsNull() || projectID.IsUnknown() {
+		return types.StringNull()
+	}
+
+	groups, err := r.client.AvailabilityGroups.List(ctx, int(projectID.ValueInt64()))
+	if err != nil {
+		diags.AddWarning(
+			"Could not read availability groups",
+			fmt.Sprintf("availability_group_uuid could not be determined for VPS %d: %s", vpsID, err),
+		)
+		return types.StringNull()
+	}
+
+	for _, group := range groups {
+		for _, member := range group.VPSList {
+			if member.ID == vpsID {
+				return types.StringValue(group.UUID)
+			}
+		}
+	}
+
+	return types.StringNull()
+}
+
+// int64SetOrNull builds a set from ids. An empty result is stored as null,
+// unless the previous value was a known empty set (configured as []).
+func int64SetOrNull(ctx context.Context, ids []int64, previous types.Set, diags *diag.Diagnostics) types.Set {
+	if len(ids) == 0 && (previous.IsNull() || previous.IsUnknown()) {
+		return types.SetNull(types.Int64Type)
+	}
+
+	set, d := types.SetValueFrom(ctx, types.Int64Type, ids)
+	diags.Append(d...)
+	return set
+}
+
+// The requiresReplaceIfConfigured* functions force replacement only when the
+// attribute is set in the configuration. Omitting an Optional+Computed
+// attribute keeps the value read from the API instead of replacing the VPS.
+func requiresReplaceIfConfiguredInt64(_ context.Context, req planmodifier.Int64Request, resp *int64planmodifier.RequiresReplaceIfFuncResponse) {
+	resp.RequiresReplace = !req.ConfigValue.IsNull()
+}
+
+func requiresReplaceIfConfiguredSet(_ context.Context, req planmodifier.SetRequest, resp *setplanmodifier.RequiresReplaceIfFuncResponse) {
+	resp.RequiresReplace = !req.ConfigValue.IsNull()
+}
+
+func requiresReplaceIfConfiguredString(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+	resp.RequiresReplace = !req.ConfigValue.IsNull()
+}
+
+// requiresReplaceIfKnownInState forces replacement only when the prior state
+// holds a value, so filling in a write-only attribute after import is an
+// in-place update.
+func requiresReplaceIfKnownInState(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+	resp.RequiresReplace = !req.StateValue.IsNull()
 }

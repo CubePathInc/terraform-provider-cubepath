@@ -39,20 +39,28 @@ type Network struct {
 
 // VPS represents a VPS instance
 type VPS struct {
-	ID           int             `json:"id"`
-	Name         string          `json:"name"`
-	Label        string          `json:"label"`
-	ProjectID    int             `json:"project_id"`
-	Status       string          `json:"status"`
-	User         string          `json:"user"`
-	Plan         VPSPlan         `json:"plan"`
-	Template     VPSTemplate     `json:"template"`
-	Location     Location        `json:"location"`
-	FloatingIPs  json.RawMessage `json:"floating_ips"`
-	IPv6         string          `json:"ipv6"`
-	Network      *NetworkInfo    `json:"network,omitempty"`
-	SSHKeys      []SSHKey        `json:"ssh_keys"`
-	CreatedAt    time.Time       `json:"created_at"`
+	ID             int                `json:"id"`
+	Name           string             `json:"name"`
+	Label          string             `json:"label"`
+	ProjectID      int                `json:"project_id"`
+	Status         string             `json:"status"`
+	User           string             `json:"user"`
+	Plan           VPSPlan            `json:"plan"`
+	Template       VPSTemplate        `json:"template"`
+	Location       Location           `json:"location"`
+	FloatingIPs    json.RawMessage    `json:"floating_ips"`
+	IPv6           string             `json:"ipv6"`
+	Network        *NetworkInfo       `json:"network,omitempty"`
+	SSHKeys        []SSHKey           `json:"ssh_keys"`
+	FirewallGroups []VPSFirewallGroup `json:"firewall_groups"`
+	BackupEnabled  bool               `json:"backup_enabled"`
+	CreatedAt      time.Time          `json:"created_at"`
+}
+
+// VPSFirewallGroup represents a firewall group assigned to a VPS
+type VPSFirewallGroup struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
 }
 
 // VPSPlan represents a VPS plan
