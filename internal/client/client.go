@@ -44,6 +44,7 @@ type Client struct {
 	AvailabilityGroups *AvailabilityGroups
 	NATGateway         *NATGatewayService
 	NetworkRoutes      *NetworkRouteService
+	ObjectStorage      *ObjectStorageService
 }
 
 // ClientOption is a function that configures a Client
@@ -129,6 +130,7 @@ func NewClient(apiToken, baseURL string, opts ...ClientOption) (*Client, error) 
 	client.AvailabilityGroups = NewAvailabilityGroups(client)
 	client.NATGateway = NewNATGatewayService(client)
 	client.NetworkRoutes = NewNetworkRouteService(client)
+	client.ObjectStorage = NewObjectStorageService(client)
 
 	return client, nil
 }

@@ -176,6 +176,9 @@ func (p *cubePathProvider) DataSources(_ context.Context) []func() datasource.Da
 		NewKubeconfigDataSource,
 		NewAvailabilityGroupsDataSource,
 		NewNATGatewayPlansDataSource,
+		NewObjectStorageTiersDataSource,
+		NewObjectStorageBucketDataSource,
+		NewObjectStorageUsageDataSource,
 	}
 }
 
@@ -203,5 +206,7 @@ func (p *cubePathProvider) Resources(_ context.Context) []func() resource.Resour
 		NewAvailabilityGroupResource,
 		NewNATGatewayResource,
 		NewNetworkRouteResource,
+		NewObjectStorageBucketResource,
+		NewObjectStorageAccessKeyResource,
 	}
 }

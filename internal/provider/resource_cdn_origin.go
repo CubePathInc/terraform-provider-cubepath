@@ -2,10 +2,13 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/cubepath/terraform-provider-cubepath/internal/client"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -21,7 +24,19 @@ var (
 	_ resource.Resource                = &cdnOriginResource{}
 	_ resource.ResourceWithConfigure   = &cdnOriginResource{}
 	_ resource.ResourceWithImportState = &cdnOriginResource{}
+	_ resource.ResourceWithValidateConfig = &cdnOriginResource{}
+	_ resource.ResourceWithModifyPlan     = &cdnOriginResource{}
 )
+
+// bucketOriginFixedAttributes are set by the API from the bucket for an origin that serves a
+// CubePath Object Storage bucket; the API refuses them next to object_storage_bucket_uuid.
+// bucketOriginReadyTimeout bounds the wait for a bucket origin to start serving after create.
+const bucketOriginReadyTimeout = 3 * time.Minute
+
+var bucketOriginFixedAttributes = []string{
+	"origin_url", "address", "port", "protocol", "health_check_enabled", "health_check_path",
+	"verify_ssl", "host_header", "base_path", "enabled",
+}
 
 func NewCDNOriginResource() resource.Resource {
 	return &cdnOriginResource{}
@@ -49,6 +64,7 @@ type cdnOriginResourceModel struct {
 	BasePath           types.String `tfsdk:"base_path"`
 	Enabled            types.Bool   `tfsdk:"enabled"`
 	HealthStatus       types.String `tfsdk:"health_status"`
+	BucketUUID         types.String `tfsdk:"object_storage_bucket_uuid"`
 }
 
 func (r *cdnOriginResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -149,6 +165,15 @@ func (r *cdnOriginResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Description: "Current health status.",
 				Computed:    true,
 			},
+			"object_storage_bucket_uuid": schema.StringAttribute{
+				Description: "UUID of a CubePath Object Storage bucket to serve through this CDN zone. " +
+					"The address, port, protocol, host header, health check and read only credentials are set " +
+					"from the bucket, so only name, weight, priority and is_backup may be set next to it. " +
+					"A bucket can be served by one origin at a time. Deleting the origin stops serving the bucket. " +
+					"Requires the object_storage:write scope. Changing it forces a new origin.",
+				Optional: true,
+				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+			},
 		},
 	}
 }
@@ -166,10 +191,84 @@ func (r *cdnOriginResource) Configure(_ context.Context, req resource.ConfigureR
 	r.client = client
 }
 
+// ValidateConfig refuses connection attributes next to object_storage_bucket_uuid.
+func (r *cdnOriginResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var bucket types.String
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("object_storage_bucket_uuid"), &bucket)...)
+	if resp.Diagnostics.HasError() || bucket.IsNull() {
+		return
+	}
+	for _, name := range bucketOriginFixedAttributes {
+		var v attr.Value
+		resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root(name), &v)...)
+		if v != nil && !v.IsNull() {
+			resp.Diagnostics.AddAttributeError(path.Root(name), "Attribute not allowed with object_storage_bucket_uuid",
+				fmt.Sprintf("%q is set from the bucket for an Object Storage origin. Only name, weight, priority and is_backup can be set.", name))
+		}
+	}
+}
+
+// ModifyPlan keeps the bucket-managed attributes of an Object Storage origin as the API reports
+// them, instead of the defaults meant for external origins, so they never show as a diff.
+func (r *cdnOriginResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+	var bucket types.String
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("object_storage_bucket_uuid"), &bucket)...)
+	if resp.Diagnostics.HasError() || bucket.IsNull() {
+		return
+	}
+	creating := req.State.Raw.IsNull()
+	for _, name := range bucketOriginFixedAttributes {
+		p := path.Root(name)
+		if name == "origin_url" {
+			resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, p, types.StringNull())...)
+			continue
+		}
+		if creating {
+			switch name {
+			case "port":
+				resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, p, types.Int64Unknown())...)
+			case "health_check_enabled", "verify_ssl", "enabled":
+				resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, p, types.BoolUnknown())...)
+			default:
+				resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, p, types.StringUnknown())...)
+			}
+			continue
+		}
+		switch name {
+		case "port":
+			var v types.Int64
+			resp.Diagnostics.Append(req.State.GetAttribute(ctx, p, &v)...)
+			resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, p, v)...)
+		case "health_check_enabled", "verify_ssl", "enabled":
+			var v types.Bool
+			resp.Diagnostics.Append(req.State.GetAttribute(ctx, p, &v)...)
+			resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, p, v)...)
+		default:
+			var v types.String
+			resp.Diagnostics.Append(req.State.GetAttribute(ctx, p, &v)...)
+			resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, p, v)...)
+		}
+	}
+	if !creating {
+		// Serving starts once the bucket's read only access is ready; the API flips it itself.
+		var status types.String
+		resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("health_status"), &status)...)
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("health_status"), status)...)
+	}
+}
+
 func (r *cdnOriginResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan cdnOriginResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if !plan.BucketUUID.IsNull() && !plan.BucketUUID.IsUnknown() {
+		r.createBucketOrigin(ctx, &plan, resp)
 		return
 	}
 
@@ -212,6 +311,84 @@ func (r *cdnOriginResource) Create(ctx context.Context, req resource.CreateReque
 
 	r.mapToState(&plan, origin)
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
+}
+
+// createBucketOrigin creates an origin that serves an Object Storage bucket and reads it back,
+// since the create response only carries a few fields.
+func (r *cdnOriginResource) createBucketOrigin(ctx context.Context, plan *cdnOriginResourceModel, resp *resource.CreateResponse) {
+	createReq := &client.CreateCDNBucketOriginRequest{
+		Name:                    plan.Name.ValueString(),
+		ObjectStorageBucketUUID: plan.BucketUUID.ValueString(),
+		Weight:                  int(plan.Weight.ValueInt64()),
+		Priority:                int(plan.Priority.ValueInt64()),
+		IsBackup:                plan.IsBackup.ValueBool(),
+	}
+	// When the origin is being replaced, the previous one releases the bucket a few seconds
+	// after its delete: the API answers 409 until then.
+	var created *client.CDNOrigin
+	var err error
+	retryUntil := time.Now().Add(bucketOriginReadyTimeout)
+	for {
+		created, err = r.client.CDN.CreateBucketOrigin(ctx, plan.ZoneUUID.ValueString(), createReq)
+		var apiErr *client.APIError
+		if err == nil || !errors.As(err, &apiErr) || !apiErr.IsConflict() || time.Now().After(retryUntil) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			resp.Diagnostics.AddError("Error creating CDN origin for the bucket", ctx.Err().Error())
+			return
+		case <-time.After(5 * time.Second):
+		}
+	}
+	if err != nil {
+		resp.Diagnostics.AddError("Error creating CDN origin for the bucket", err.Error())
+		return
+	}
+
+	// The origin starts serving once the bucket's read only access is ready (usually seconds).
+	var origin *client.CDNOrigin
+	deadline := time.Now().Add(bucketOriginReadyTimeout)
+	for {
+		origin, err = r.findOrigin(ctx, plan.ZoneUUID.ValueString(), created.UUID)
+		if err != nil {
+			resp.Diagnostics.AddError("Error reading the new CDN origin", err.Error())
+			return
+		}
+		if origin == nil || origin.Enabled || time.Now().After(deadline) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			resp.Diagnostics.AddError("Error waiting for the CDN origin", ctx.Err().Error())
+			return
+		case <-time.After(5 * time.Second):
+		}
+	}
+	if origin == nil {
+		origin = created
+	}
+	if !origin.Enabled {
+		resp.Diagnostics.AddWarning("CDN origin not serving yet",
+			"The origin was created but the bucket's access is not ready yet. It starts serving on its own; run terraform refresh later.")
+	}
+	r.mapToState(plan, origin)
+	plan.OriginURL = types.StringNull()
+	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
+}
+
+// findOrigin returns the origin of the zone with that UUID, or nil when it does not exist.
+func (r *cdnOriginResource) findOrigin(ctx context.Context, zoneUUID, originUUID string) (*client.CDNOrigin, error) {
+	origins, err := r.client.CDN.ListOrigins(ctx, zoneUUID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range origins {
+		if origins[i].UUID == originUUID {
+			return &origins[i], nil
+		}
+	}
+	return nil, nil
 }
 
 func (r *cdnOriginResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -257,21 +434,10 @@ func (r *cdnOriginResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 
 	updateReq := &client.UpdateCDNOriginRequest{}
+	bucketOrigin := !state.BucketUUID.IsNull()
 	if !plan.Name.Equal(state.Name) {
 		v := plan.Name.ValueString()
 		updateReq.Name = &v
-	}
-	if !plan.Address.Equal(state.Address) {
-		v := plan.Address.ValueString()
-		updateReq.Address = &v
-	}
-	if !plan.Port.Equal(state.Port) {
-		v := int(plan.Port.ValueInt64())
-		updateReq.Port = &v
-	}
-	if !plan.Protocol.Equal(state.Protocol) {
-		v := plan.Protocol.ValueString()
-		updateReq.Protocol = &v
 	}
 	if !plan.Weight.Equal(state.Weight) {
 		v := int(plan.Weight.ValueInt64())
@@ -281,13 +447,32 @@ func (r *cdnOriginResource) Update(ctx context.Context, req resource.UpdateReque
 		v := int(plan.Priority.ValueInt64())
 		updateReq.Priority = &v
 	}
-	if !plan.HostHeader.Equal(state.HostHeader) {
-		v := plan.HostHeader.ValueString()
-		updateReq.HostHeader = &v
+	if !plan.IsBackup.Equal(state.IsBackup) {
+		v := plan.IsBackup.ValueBool()
+		updateReq.IsBackup = &v
 	}
-	if !plan.BasePath.Equal(state.BasePath) {
-		v := plan.BasePath.ValueString()
-		updateReq.BasePath = &v
+	// Only name, weight, priority and is_backup can change on a bucket origin.
+	if !bucketOrigin {
+		if !plan.Address.Equal(state.Address) {
+			v := plan.Address.ValueString()
+			updateReq.Address = &v
+		}
+		if !plan.Port.Equal(state.Port) {
+			v := int(plan.Port.ValueInt64())
+			updateReq.Port = &v
+		}
+		if !plan.Protocol.Equal(state.Protocol) {
+			v := plan.Protocol.ValueString()
+			updateReq.Protocol = &v
+		}
+		if !plan.HostHeader.Equal(state.HostHeader) {
+			v := plan.HostHeader.ValueString()
+			updateReq.HostHeader = &v
+		}
+		if !plan.BasePath.Equal(state.BasePath) {
+			v := plan.BasePath.ValueString()
+			updateReq.BasePath = &v
+		}
 	}
 
 	err := r.client.CDN.UpdateOrigin(ctx, state.ZoneUUID.ValueString(), state.ID.ValueString(), updateReq)
@@ -342,4 +527,9 @@ func (r *cdnOriginResource) mapToState(state *cdnOriginResourceModel, origin *cl
 	state.BasePath = types.StringValue(origin.BasePath)
 	state.Enabled = types.BoolValue(origin.Enabled)
 	state.HealthStatus = types.StringValue(origin.HealthStatus)
+	if origin.ObjectStorageBucketUUID != nil && *origin.ObjectStorageBucketUUID != "" {
+		state.BucketUUID = types.StringValue(*origin.ObjectStorageBucketUUID)
+	} else {
+		state.BucketUUID = types.StringNull()
+	}
 }
