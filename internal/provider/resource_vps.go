@@ -83,12 +83,12 @@ func (r *vpsResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 			"name": schema.StringAttribute{
-				Description: "The hostname of the VPS.",
+				Description: "The hostname of the VPS. Can be changed in place.",
 				Required:    true,
 				Validators:  []validator.String{HostnameValidator()},
 			},
 			"label": schema.StringAttribute{
-				Description: "A label for the VPS.",
+				Description: "A label for the VPS. Can be changed in place.",
 				Optional:    true,
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
@@ -515,13 +515,22 @@ func (r *vpsResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		return
 	}
 
-	// Check if name changed
+	// Hostname and label are changed in place (PATCH /vps/update/{id}).
+	updateReq := &client.UpdateVPSRequest{}
 	if !plan.Name.Equal(state.Name) {
-		err := r.client.VPS.Rename(ctx, id, plan.Name.ValueString())
+		name := plan.Name.ValueString()
+		updateReq.Name = &name
+	}
+	if !plan.Label.IsNull() && !plan.Label.IsUnknown() && !plan.Label.Equal(state.Label) {
+		label := plan.Label.ValueString()
+		updateReq.Label = &label
+	}
+	if updateReq.Name != nil || updateReq.Label != nil {
+		err := r.client.VPS.Update(ctx, id, updateReq)
 		if err != nil {
 			resp.Diagnostics.AddError(
-				"Error renaming VPS",
-				"Could not rename VPS: "+err.Error(),
+				"Error updating VPS",
+				"Could not update VPS hostname or label: "+err.Error(),
 			)
 			return
 		}

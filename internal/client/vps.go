@@ -86,14 +86,24 @@ func (v *VPSService) ChangePassword(ctx context.Context, vpsID int, newPassword 
 	return &result, nil
 }
 
-// Rename renames a VPS
-func (v *VPSService) Rename(ctx context.Context, vpsID int, newName string) error {
-	data := map[string]string{"name": newName}
-	err := v.client.Put(ctx, fmt.Sprintf("/vps/%d", vpsID), data, nil)
+// UpdateVPSRequest changes a VPS hostname and/or label. Nil fields are left as they are.
+type UpdateVPSRequest struct {
+	Name  *string `json:"name,omitempty"`
+	Label *string `json:"label,omitempty"`
+}
+
+// Update changes a VPS hostname and/or label (PATCH /vps/update/{id}).
+func (v *VPSService) Update(ctx context.Context, vpsID int, req *UpdateVPSRequest) error {
+	err := v.client.Patch(ctx, fmt.Sprintf("/vps/update/%d", vpsID), req, nil)
 	if err != nil {
-		return fmt.Errorf("failed to rename VPS: %w", err)
+		return fmt.Errorf("failed to update VPS: %w", err)
 	}
 	return nil
+}
+
+// Rename changes a VPS hostname.
+func (v *VPSService) Rename(ctx context.Context, vpsID int, newName string) error {
+	return v.Update(ctx, vpsID, &UpdateVPSRequest{Name: &newName})
 }
 
 // WaitForVPSStatus waits for a VPS to reach a specific status
