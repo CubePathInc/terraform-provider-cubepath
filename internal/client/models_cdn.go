@@ -50,6 +50,8 @@ type CDNOrigin struct {
 	Enabled            bool   `json:"enabled"`
 	CreatedAt          string `json:"created_at"`
 	UpdatedAt          string `json:"updated_at"`
+	// Set when the origin serves a CubePath Object Storage bucket (read only connection fields)
+	ObjectStorageBucketUUID *string `json:"object_storage_bucket_uuid"`
 }
 
 // CDNRule represents a CDN edge rule or WAF rule
@@ -100,6 +102,17 @@ type CreateCDNOriginRequest struct {
 	Enabled            bool    `json:"enabled"`
 }
 
+// CreateCDNBucketOriginRequest creates an origin that serves a CubePath Object Storage bucket.
+// The API fills every connection field from the bucket and refuses them next to the bucket UUID,
+// so only these fields are sent.
+type CreateCDNBucketOriginRequest struct {
+	Name                    string `json:"name"`
+	ObjectStorageBucketUUID string `json:"object_storage_bucket_uuid"`
+	Weight                  int    `json:"weight"`
+	Priority                int    `json:"priority"`
+	IsBackup                bool   `json:"is_backup"`
+}
+
 // UpdateCDNOriginRequest represents a request to update a CDN origin
 type UpdateCDNOriginRequest struct {
 	Name               *string `json:"name,omitempty"`
@@ -108,6 +121,7 @@ type UpdateCDNOriginRequest struct {
 	Protocol           *string `json:"protocol,omitempty"`
 	Weight             *int    `json:"weight,omitempty"`
 	Priority           *int    `json:"priority,omitempty"`
+	IsBackup           *bool   `json:"is_backup,omitempty"`
 	HostHeader         *string `json:"host_header,omitempty"`
 	BasePath           *string `json:"base_path,omitempty"`
 	HealthCheckEnabled *bool   `json:"health_check_enabled,omitempty"`

@@ -113,6 +113,10 @@ Kubernetes cluster deployment:
 High availability with availability groups:
 - `main.tf` - Create availability group, deploy VPS across different physical hosts, query groups
 
+### 14. Object Storage
+S3 compatible Object Storage:
+- `main.tf` - Create a bucket and a read only access key, and serve the bucket through the CDN
+
 ## Usage
 
 Navigate to any example directory and run:

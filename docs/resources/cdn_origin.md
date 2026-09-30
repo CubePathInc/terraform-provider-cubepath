@@ -29,6 +29,7 @@ Manages a CDN origin server on CubePath Cloud.
 - `health_check_path` (String) Health check path.
 - `host_header` (String) Custom Host header.
 - `is_backup` (Boolean) Mark as backup origin.
+- `object_storage_bucket_uuid` (String) UUID of a CubePath Object Storage bucket to serve through this CDN zone. The address, port, protocol, host header, health check and read only credentials are set from the bucket, so only name, weight, priority and is_backup may be set next to it. A bucket can be served by one origin at a time. Deleting the origin stops serving the bucket. Requires the object_storage:write scope. Changing it forces a new origin.
 - `origin_url` (String) Full origin URL (auto-parsed). Use this OR address.
 - `port` (Number) Origin port (1-65535).
 - `priority` (Number) Priority (1-100).

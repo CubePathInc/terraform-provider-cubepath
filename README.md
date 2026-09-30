@@ -95,13 +95,15 @@ resource "cubepath_vps" "web" {
 - `cubepath_load_balancer` - Manage load balancers
 - `cubepath_lb_listener` - Manage load balancer listeners
 - `cubepath_cdn_zone` - Manage CDN zones
-- `cubepath_cdn_origin` - Manage CDN origins
+- `cubepath_cdn_origin` - Manage CDN origins (external servers or Object Storage buckets)
 - `cubepath_cdn_rule` - Manage CDN cache rules
 - `cubepath_cdn_waf_rule` - Manage CDN WAF rules
 - `cubepath_kubernetes_cluster` - Manage Kubernetes clusters
 - `cubepath_kubernetes_node_pool` - Manage Kubernetes node pools
 - `cubepath_kubernetes_addon` - Manage Kubernetes addons
 - `cubepath_availability_group` - Manage availability groups for high availability
+- `cubepath_object_storage_bucket` - Manage S3 compatible Object Storage buckets
+- `cubepath_object_storage_access_key` - Manage Object Storage access keys for S3 clients
 
 ### Data Sources
 - `cubepath_locations` - List available locations
@@ -117,6 +119,9 @@ resource "cubepath_vps" "web" {
 - `cubepath_kubernetes_addons` - List Kubernetes addons
 - `cubepath_kubeconfig` - Get cluster kubeconfig
 - `cubepath_availability_groups` - List availability groups for a project
+- `cubepath_object_storage_tiers` - List Object Storage tiers with endpoint, prices and free tier
+- `cubepath_object_storage_bucket` - Look up an Object Storage bucket by name or UUID
+- `cubepath_object_storage_usage` - Object Storage usage and cost of a month
 
 ## Examples
 

@@ -85,6 +85,15 @@ func (c *CDNService) CreateOrigin(ctx context.Context, zoneUUID string, req *Cre
 	return &result, nil
 }
 
+// CreateBucketOrigin creates an origin that serves a CubePath Object Storage bucket
+func (c *CDNService) CreateBucketOrigin(ctx context.Context, zoneUUID string, req *CreateCDNBucketOriginRequest) (*CDNOrigin, error) {
+	var result CDNOrigin
+	if err := c.client.Post(ctx, fmt.Sprintf("/cdn/zones/%s/origins", zoneUUID), req, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // UpdateOrigin updates a CDN origin
 func (c *CDNService) UpdateOrigin(ctx context.Context, zoneUUID, originUUID string, req *UpdateCDNOriginRequest) error {
 	return c.client.Patch(ctx, fmt.Sprintf("/cdn/zones/%s/origins/%s", zoneUUID, originUUID), req, nil)

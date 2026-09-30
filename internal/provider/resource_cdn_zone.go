@@ -233,9 +233,15 @@ func (r *cdnZoneResource) mapToState(state *cdnZoneResourceModel, zone *client.C
 	state.Name = types.StringValue(zone.Name)
 	state.Domain = types.StringValue(zone.Domain)
 	state.CustomDomain = types.StringValue(zone.CustomDomain)
-	state.PlanName = types.StringValue(zone.PlanName)
+	// The create response carries no project_id and the detail no plan_name: keep the known
+	// value instead of overwriting it with an empty one (inconsistent result / perpetual diff).
+	if zone.PlanName != "" || state.PlanName.IsNull() || state.PlanName.IsUnknown() {
+		state.PlanName = types.StringValue(zone.PlanName)
+	}
 	state.SSLType = types.StringValue(zone.SSLType)
-	state.ProjectID = types.Int64Value(int64(zone.ProjectID))
+	if zone.ProjectID != 0 || state.ProjectID.IsNull() || state.ProjectID.IsUnknown() {
+		state.ProjectID = types.Int64Value(int64(zone.ProjectID))
+	}
 	state.Status = types.StringValue(zone.Status)
 	state.CreatedAt = types.StringValue(zone.CreatedAt)
 	state.UpdatedAt = types.StringValue(zone.UpdatedAt)

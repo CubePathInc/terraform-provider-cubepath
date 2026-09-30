@@ -14,8 +14,8 @@ testacc:
 
 # Install provider locally
 install: build
-	mkdir -p ~/.terraform.d/plugins/registry.terraform.io/cubepathinc/cubepath/0.6.0/darwin_arm64
-	cp terraform-provider-cubepath ~/.terraform.d/plugins/registry.terraform.io/cubepathinc/cubepath/0.6.0/darwin_arm64/
+	mkdir -p ~/.terraform.d/plugins/registry.terraform.io/cubepathinc/cubepath/0.7.0/darwin_arm64
+	cp terraform-provider-cubepath ~/.terraform.d/plugins/registry.terraform.io/cubepathinc/cubepath/0.7.0/darwin_arm64/
 
 # Generate documentation
 docs:
