@@ -21,7 +21,7 @@ Manages a private network on CubePath Cloud.
 - `location` (String) The location where the network will be created.
 - `name` (String) The name of the network.
 - `prefix` (Number) The network prefix (8-30).
-- `project_id` (Number) The project ID to associate the network with.
+- `project_id` (Number) The project ID to associate the network with. Changing it moves the network to the other project in place.
 
 ### Optional
 

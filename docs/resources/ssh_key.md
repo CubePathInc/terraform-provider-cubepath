@@ -17,7 +17,7 @@ Manages an SSH key on CubePath Cloud.
 
 ### Required
 
-- `name` (String) The name of the SSH key.
+- `name` (String) The name of the SSH key. Can be changed in place.
 - `public_key` (String, Sensitive) The SSH public key.
 
 ### Read-Only

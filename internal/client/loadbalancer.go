@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 )
 
@@ -138,4 +139,44 @@ func (l *LoadBalancerService) ListPlans(ctx context.Context) ([]LBLocationPlans,
 		return nil, fmt.Errorf("failed to list load balancer plans: %w", err)
 	}
 	return result, nil
+}
+
+// SetProtection enables or disables deletion protection
+func (l *LoadBalancerService) SetProtection(ctx context.Context, uuid string, enabled bool) error {
+	return l.client.Post(ctx, fmt.Sprintf("/loadbalancer/%s/protection", uuid), map[string]bool{"enabled": enabled}, nil)
+}
+
+// MoveProject moves a load balancer to another project of the organization
+func (l *LoadBalancerService) MoveProject(ctx context.Context, uuid string, projectID int) error {
+	return l.client.Post(ctx, fmt.Sprintf("/loadbalancer/%s/move-project", uuid), map[string]int{"project_id": projectID}, nil)
+}
+
+// GetListener finds a listener of a load balancer. It returns a 404 APIError when either is missing.
+func (l *LoadBalancerService) GetListener(ctx context.Context, lbUUID, listenerUUID string) (*LBListener, error) {
+	lb, err := l.Get(ctx, lbUUID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range lb.Listeners {
+		if lb.Listeners[i].UUID == listenerUUID {
+			return &lb.Listeners[i], nil
+		}
+	}
+	return nil, &APIError{StatusCode: 404, Message: "Not Found", Detail: fmt.Sprintf("listener %s not found", listenerUUID)}
+}
+
+// GetHealthCheck returns the health check of a listener, or nil when none is configured
+func (l *LoadBalancerService) GetHealthCheck(ctx context.Context, lbUUID, listenerUUID string) (*HealthCheckConfig, error) {
+	listener, err := l.GetListener(ctx, lbUUID, listenerUUID)
+	if err != nil {
+		return nil, err
+	}
+	if len(listener.HealthCheck) == 0 || string(listener.HealthCheck) == "null" {
+		return nil, nil
+	}
+	var hc HealthCheckConfig
+	if err := json.Unmarshal(listener.HealthCheck, &hc); err != nil {
+		return nil, fmt.Errorf("failed to decode health check: %w", err)
+	}
+	return &hc, nil
 }

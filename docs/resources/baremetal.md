@@ -21,16 +21,18 @@ Manages a Baremetal server on CubePath Cloud. Destroying this resource (terrafor
 - `location` (String) The location where the Baremetal server will be deployed (e.g., 'us-mia-1').
 - `model_name` (String) The model name for the Baremetal server (e.g., 'c1.metal.plus').
 - `password` (String, Sensitive) Root password for the Baremetal server.
-- `project_id` (Number) The project ID to associate the Baremetal server with.
+- `project_id` (Number) The project ID to associate the Baremetal server with. Changing it moves the server to the other project in place.
 
 ### Optional
 
 - `disk_layout_name` (String) The disk layout configuration (e.g., 'single', 'raid1').
 - `label` (String) A label for the Baremetal server.
 - `monitoring_enable` (Boolean) Enable monitoring for this Baremetal server.
+- `network_id` (Number) Private network to attach the server to. Changing it detaches the old network and attaches the new one in place; the new interface is active after the server restarts. Set it to 0 to detach it.
 - `os_name` (String) The operating system to install (e.g., 'debian-12').
 - `power_state` (String) Desired power state of the server. Valid values: 'running', 'stopped'.
-- `ssh_key_ids` (List of Number) List of SSH key IDs to add to the server.
+- `protected` (Boolean) Protection against reinstallation. If omitted, the current setting is kept.
+- `ssh_key_ids` (List of Number) List of SSH key IDs to add to the server. Changing it attaches and detaches keys in place; the server only picks up the new keys on its next reinstall.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `user` (String) SSH user for the server. Defaults to 'root'.
 
@@ -42,6 +44,7 @@ Manages a Baremetal server on CubePath Cloud. Destroying this resource (terrafor
 - `id` (String) The unique identifier of the Baremetal server.
 - `ipv6` (String) The IPv6 address of the server.
 - `main_ip` (String) The main public IPv4 address of the server.
+- `private_ip` (String) Address of the server in the private network.
 - `ram` (Number) RAM in GB.
 - `status` (String) The current status of the Baremetal server (read-only).
 - `storage_type` (String) Storage type (SSD, HDD, NVMe).

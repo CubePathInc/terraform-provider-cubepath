@@ -54,7 +54,16 @@ type VPS struct {
 	SSHKeys        []SSHKey           `json:"ssh_keys"`
 	FirewallGroups []VPSFirewallGroup `json:"firewall_groups"`
 	BackupEnabled  bool               `json:"backup_enabled"`
+	Protected      bool               `json:"protected"`
+	MountedISO     *VPSMountedISO     `json:"mounted_iso,omitempty"`
 	CreatedAt      time.Time          `json:"created_at"`
+}
+
+// VPSMountedISO is the ISO attached to a VPS
+type VPSMountedISO struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Filename string `json:"filename"`
 }
 
 // VPSFirewallGroup represents a firewall group assigned to a VPS
@@ -121,6 +130,9 @@ type Baremetal struct {
 	BaremetalModel   BaremetalModel  `json:"baremetal_model"`
 	FloatingIPs      []FloatingIP    `json:"floating_ips"`
 	MonitoringEnable bool            `json:"monitoring_enable"`
+	Protected        bool            `json:"protected"`
+	SSHKeys          []SSHKey        `json:"ssh_keys"`
+	Network          *NetworkInfo    `json:"network,omitempty"`
 	CreatedAt        time.Time       `json:"created_at"`
 }
 

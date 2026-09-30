@@ -134,7 +134,12 @@ func (r *lbListenerResource) Create(ctx context.Context, req resource.CreateRequ
 		StickySessions: plan.StickySessions.ValueBool(),
 	}
 
-	listener, err := r.client.LoadBalancer.CreateListener(ctx, plan.LoadBalancerID.ValueString(), createReq)
+	var listener *client.LBListener
+	err := lbRetry(ctx, func() error {
+		var err error
+		listener, err = r.client.LoadBalancer.CreateListener(ctx, plan.LoadBalancerID.ValueString(), createReq)
+		return err
+	})
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating listener", err.Error())
 		return
@@ -213,7 +218,10 @@ func (r *lbListenerResource) Update(ctx context.Context, req resource.UpdateRequ
 		updateReq.Enabled = &v
 	}
 
-	_, err := r.client.LoadBalancer.UpdateListener(ctx, state.LoadBalancerID.ValueString(), state.ID.ValueString(), updateReq)
+	err := lbRetry(ctx, func() error {
+		_, err := r.client.LoadBalancer.UpdateListener(ctx, state.LoadBalancerID.ValueString(), state.ID.ValueString(), updateReq)
+		return err
+	})
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating listener", err.Error())
 		return
@@ -230,7 +238,9 @@ func (r *lbListenerResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
-	err := r.client.LoadBalancer.DeleteListener(ctx, state.LoadBalancerID.ValueString(), state.ID.ValueString())
+	err := lbRetry(ctx, func() error {
+		return r.client.LoadBalancer.DeleteListener(ctx, state.LoadBalancerID.ValueString(), state.ID.ValueString())
+	})
 	if err != nil {
 		resp.Diagnostics.AddError("Error deleting listener", err.Error())
 		return

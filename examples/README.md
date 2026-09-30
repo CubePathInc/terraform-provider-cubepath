@@ -117,6 +117,18 @@ High availability with availability groups:
 S3 compatible Object Storage:
 - `main.tf` - Create a bucket and a read only access key, and serve the bucket through the CDN
 
+### 15. Managed Database
+- `main.tf` - Managed PostgreSQL with backups, tuned parameters, a database and an application user
+
+### 16. Cloud Alerts
+- `main.tf` - Email and Slack channels, and CPU and disk alerts on a VPS
+
+### 17. DDoS Mitigation
+- `main.tf` - Protection profile with geo and prefix list filtering, and DDoS firewall rules for an IP with Premium protection
+
+### 18. Server Management
+- `main.tf` - A VPS with protection, backups, a private network and a BGP peer, behind a load balancer with a health check
+
 ## Usage
 
 Navigate to any example directory and run:

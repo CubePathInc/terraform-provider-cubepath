@@ -17,7 +17,21 @@ type KubernetesCluster struct {
 	Location       KubernetesLocation   `json:"location"`
 	Network        *KubernetesNetwork   `json:"network,omitempty"`
 	NodePools      []KubernetesNodePool `json:"node_pools"`
+	Protected      bool                 `json:"protected"`
 	CreatedAt      string               `json:"created_at"`
+}
+
+// KubernetesLoadBalancer is a load balancer that targets the node pools of a cluster
+type KubernetesLoadBalancer struct {
+	UUID           string  `json:"uuid"`
+	Name           string  `json:"name"`
+	Label          *string `json:"label"`
+	Status         string  `json:"status"`
+	PlanName       string  `json:"plan_name"`
+	LocationName   string  `json:"location_name"`
+	FloatingIP     *string `json:"floating_ip"`
+	ListenersCount int     `json:"listeners_count"`
+	TargetCount    int     `json:"target_count"`
 }
 
 // KubernetesLocation represents a cluster location

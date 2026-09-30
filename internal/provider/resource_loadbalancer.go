@@ -6,9 +6,11 @@ import (
 	"time"
 
 	"github.com/cubepath/terraform-provider-cubepath/internal/client"
+	"github.com/cubepath/terraform-provider-cubepath/internal/utils"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -39,6 +41,7 @@ type loadBalancerResourceModel struct {
 	NetworkID    types.Int64  `tfsdk:"network_id"`
 	Status       types.String `tfsdk:"status"`
 	IPAddress    types.String `tfsdk:"ip_address"`
+	Protected    types.Bool   `tfsdk:"protected"`
 	CreatedAt    types.String `tfsdk:"created_at"`
 }
 
@@ -78,9 +81,21 @@ func (r *loadBalancerResource) Schema(_ context.Context, _ resource.SchemaReques
 				},
 			},
 			"project_id": schema.Int64Attribute{
-				Description: "The project ID. Uses default project if not specified.",
+				Description: "The project ID. Uses default project if not specified. Changing it moves the load balancer in place.",
 				Optional:    true,
 				Computed:    true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
+			},
+			"protected": schema.BoolAttribute{
+				Description: "Deletion protection. A protected load balancer cannot be destroyed until this is set to " +
+					"false. If omitted, the current setting is kept.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"network_id": schema.Int64Attribute{
 				Description: "The private network ID to attach the load balancer to. Requires replacement if changed.",
@@ -148,19 +163,40 @@ func (r *loadBalancerResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	// Wait for load balancer to be ready (exit deploying state)
+	// Save the ID right away so a failed wait does not leave an untracked load balancer behind.
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), lb.UUID)...)
+
+	// Wait for the load balancer to be ready: listeners and targets cannot be added while
+	// it is deploying.
 	if lb.Status == "deploying" || lb.Status == "provisioning" {
-		for i := 0; i < 60; i++ {
-			time.Sleep(5 * time.Second)
-			lb, err = r.client.LoadBalancer.Get(ctx, lb.UUID)
-			if err != nil {
-				resp.Diagnostics.AddError("Error reading load balancer after creation", err.Error())
-				return
-			}
-			if lb.Status == "active" || lb.Status == "running" {
-				break
-			}
+		uuid := lb.UUID
+		conf := &utils.StateChangeConf{
+			Pending:      []string{"deploying", "provisioning", "pending"},
+			Target:       []string{"active", "running"},
+			Timeout:      20 * time.Minute,
+			PollInterval: 10 * time.Second,
+			Refresh: func() (interface{}, string, error) {
+				current, err := r.client.LoadBalancer.Get(ctx, uuid)
+				if err != nil {
+					return nil, "", err
+				}
+				return current, current.Status, nil
+			},
 		}
+		result, err := conf.WaitForState(ctx)
+		if err != nil {
+			resp.Diagnostics.AddError("Error waiting for the load balancer to be active", err.Error())
+			return
+		}
+		lb = result.(*client.LoadBalancer)
+	}
+
+	if plan.Protected.ValueBool() {
+		if err := r.client.LoadBalancer.SetProtection(ctx, lb.UUID, true); err != nil {
+			resp.Diagnostics.AddError("Error enabling load balancer protection", err.Error())
+			return
+		}
+		lb.Protected = true
 	}
 
 	r.mapToState(&plan, lb)
@@ -194,6 +230,19 @@ func (r *loadBalancerResource) Update(ctx context.Context, req resource.UpdateRe
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	if !plan.ProjectID.IsUnknown() && !plan.ProjectID.Equal(state.ProjectID) {
+		if err := r.client.LoadBalancer.MoveProject(ctx, state.ID.ValueString(), int(plan.ProjectID.ValueInt64())); err != nil {
+			resp.Diagnostics.AddError("Error moving load balancer", err.Error())
+			return
+		}
+	}
+	if want := knownBool(plan.Protected); want != nil && !plan.Protected.Equal(state.Protected) {
+		if err := r.client.LoadBalancer.SetProtection(ctx, state.ID.ValueString(), *want); err != nil {
+			resp.Diagnostics.AddError("Error changing load balancer protection", err.Error())
+			return
+		}
 	}
 
 	// Handle plan resize
@@ -268,6 +317,7 @@ func (r *loadBalancerResource) mapToState(state *loadBalancerResourceModel, lb *
 	state.Status = types.StringValue(lb.Status)
 	state.LocationName = types.StringValue(lb.LocationName)
 	state.ProjectID = types.Int64Value(int64(lb.ProjectID))
+	state.Protected = types.BoolValue(lb.Protected)
 	state.CreatedAt = types.StringValue(lb.CreatedAt)
 
 	if lb.PlanName != "" {

@@ -20,7 +20,7 @@ Manages a Kubernetes cluster on CubePath Cloud.
 - `location` (String) The location name (e.g., us-mia-1).
 - `name` (String) The name of the cluster.
 - `plan` (String) The server plan for the default node pool.
-- `project_id` (Number) The project ID to create the cluster in.
+- `project_id` (Number) The project ID to create the cluster in. Changing it moves the cluster and its workers in place.
 
 ### Optional
 
@@ -32,6 +32,7 @@ Manages a Kubernetes cluster on CubePath Cloud.
 - `network_id` (Number) Existing network ID to use. If not set, a new network is created.
 - `node_cidr` (String) Custom node CIDR.
 - `pod_cidr` (String) Pod CIDR range.
+- `protected` (Boolean) Deletion protection. A protected cluster cannot be destroyed until this is set to false. If omitted, the current setting is kept.
 - `service_cidr` (String) Service CIDR range.
 - `version` (String) Kubernetes version. Defaults to the latest available version.
 

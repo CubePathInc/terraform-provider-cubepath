@@ -25,7 +25,8 @@ Manages a load balancer on CubePath Cloud.
 
 - `label` (String) Optional label for the load balancer.
 - `network_id` (Number) The private network ID to attach the load balancer to. Requires replacement if changed.
-- `project_id` (Number) The project ID. Uses default project if not specified.
+- `project_id` (Number) The project ID. Uses default project if not specified. Changing it moves the load balancer in place.
+- `protected` (Boolean) Deletion protection. A protected load balancer cannot be destroyed until this is set to false. If omitted, the current setting is kept.
 
 ### Read-Only
 

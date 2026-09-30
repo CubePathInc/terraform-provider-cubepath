@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -48,6 +47,9 @@ type baremetalResourceModel struct {
 	Password         types.String   `tfsdk:"password"`
 	SSHKeyIDs        types.List     `tfsdk:"ssh_key_ids"`
 	MonitoringEnable types.Bool     `tfsdk:"monitoring_enable"`
+	Protected        types.Bool     `tfsdk:"protected"`
+	NetworkID        types.Int64    `tfsdk:"network_id"`
+	PrivateIP        types.String   `tfsdk:"private_ip"`
 	PowerState       types.String   `tfsdk:"power_state"`
 	Status           types.String   `tfsdk:"status"`
 	MainIP           types.String   `tfsdk:"main_ip"`
@@ -89,11 +91,8 @@ func (r *baremetalResource) Schema(ctx context.Context, _ resource.SchemaRequest
 				},
 			},
 			"project_id": schema.Int64Attribute{
-				Description: "The project ID to associate the Baremetal server with.",
+				Description: "The project ID to associate the Baremetal server with. Changing it moves the server to the other project in place.",
 				Required:    true,
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.RequiresReplace(),
-				},
 			},
 			"location": schema.StringAttribute{
 				Description: "The location where the Baremetal server will be deployed (e.g., 'us-mia-1').",
@@ -140,12 +139,31 @@ func (r *baremetalResource) Schema(ctx context.Context, _ resource.SchemaRequest
 				Validators:  []validator.String{StrongPasswordValidator()},
 			},
 			"ssh_key_ids": schema.ListAttribute{
-				Description: "List of SSH key IDs to add to the server.",
+				Description: "List of SSH key IDs to add to the server. Changing it attaches and detaches keys in place; " +
+					"the server only picks up the new keys on its next reinstall.",
 				Optional:    true,
 				ElementType: types.Int64Type,
-				PlanModifiers: []planmodifier.List{
-					listplanmodifier.RequiresReplace(),
+			},
+			"protected": schema.BoolAttribute{
+				Description: "Protection against reinstallation. If omitted, the current setting is kept.",
+				Optional:    true,
+				Computed:    true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
 				},
+			},
+			"network_id": schema.Int64Attribute{
+				Description: "Private network to attach the server to. Changing it detaches the old network and attaches " +
+					"the new one in place; the new interface is active after the server restarts. Set it to 0 to detach it.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
+			},
+			"private_ip": schema.StringAttribute{
+				Description: "Address of the server in the private network.",
+				Computed:    true,
 			},
 			"monitoring_enable": schema.BoolAttribute{
 				Description: "Enable monitoring for this Baremetal server.",
@@ -335,6 +353,26 @@ func (r *baremetalResource) Create(ctx context.Context, req resource.CreateReque
 		}
 	}
 
+	// Save the ID right away so a failed follow-up call does not lose track of the server.
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), strconv.Itoa(baremetal.ID))...)
+
+	if plan.Protected.ValueBool() {
+		if err := r.client.Baremetal.SetProtection(createCtx, baremetal.ID, true); err != nil {
+			resp.Diagnostics.AddError("Error enabling Baremetal protection", err.Error())
+			return
+		}
+	}
+	if networkID := knownInt(plan.NetworkID); networkID != nil && *networkID != 0 {
+		if err := r.client.Baremetal.AttachNetwork(createCtx, baremetal.ID, *networkID); err != nil {
+			resp.Diagnostics.AddError("Error attaching private network", err.Error())
+			return
+		}
+	}
+	if baremetal, err = r.client.Baremetal.Get(createCtx, baremetal.ID); err != nil {
+		resp.Diagnostics.AddError("Error reading Baremetal after deployment", err.Error())
+		return
+	}
+
 	// Update state
 	r.updateStateFromBaremetal(ctx, &plan, baremetal, &resp.Diagnostics)
 
@@ -417,6 +455,11 @@ func (r *baremetalResource) Update(ctx context.Context, req resource.UpdateReque
 			)
 			return
 		}
+	}
+
+	r.applyInPlaceChanges(ctx, id, &plan, &state, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
 	// Check if monitoring changed
@@ -553,6 +596,19 @@ func (r *baremetalResource) updateStateFromBaremetal(ctx context.Context, state 
 	// Monitoring
 	state.MonitoringEnable = types.BoolValue(bm.MonitoringEnable)
 
+	// Protection and private network
+	state.Protected = types.BoolValue(bm.Protected)
+	if bm.Network != nil && bm.Network.ID != 0 {
+		state.NetworkID = types.Int64Value(int64(bm.Network.ID))
+		state.PrivateIP = types.StringValue(bm.Network.AssignedIP)
+	} else {
+		// network_id = 0 in the configuration means "no private network".
+		if state.NetworkID.IsNull() || state.NetworkID.IsUnknown() || state.NetworkID.ValueInt64() != 0 {
+			state.NetworkID = types.Int64Null()
+		}
+		state.PrivateIP = types.StringNull()
+	}
+
 	// IPs
 	for _, ip := range bm.FloatingIPs {
 		if ip.Type == "IPv4" {
@@ -571,6 +627,70 @@ func (r *baremetalResource) updateStateFromBaremetal(ctx context.Context, state 
 	default:
 		if state.PowerState.IsNull() {
 			state.PowerState = types.StringValue("running")
+		}
+	}
+}
+
+// applyInPlaceChanges applies project, protection, SSH key and private network changes.
+func (r *baremetalResource) applyInPlaceChanges(ctx context.Context, id int, plan, prior *baremetalResourceModel, diags *diag.Diagnostics) {
+	if !plan.ProjectID.Equal(prior.ProjectID) {
+		if err := r.client.Baremetal.MoveProject(ctx, id, int(plan.ProjectID.ValueInt64())); err != nil {
+			diags.AddError("Error moving Baremetal", err.Error())
+			return
+		}
+	}
+
+	if want := knownBool(plan.Protected); want != nil && !plan.Protected.Equal(prior.Protected) {
+		if err := r.client.Baremetal.SetProtection(ctx, id, *want); err != nil {
+			diags.AddError("Error changing Baremetal protection", err.Error())
+			return
+		}
+	}
+
+	if !plan.SSHKeyIDs.IsUnknown() && !plan.SSHKeyIDs.Equal(prior.SSHKeyIDs) {
+		var have, want []int64
+		if !prior.SSHKeyIDs.IsNull() && !prior.SSHKeyIDs.IsUnknown() {
+			diags.Append(prior.SSHKeyIDs.ElementsAs(ctx, &have, false)...)
+		}
+		if !plan.SSHKeyIDs.IsNull() {
+			diags.Append(plan.SSHKeyIDs.ElementsAs(ctx, &want, false)...)
+		}
+		if diags.HasError() {
+			return
+		}
+		add, remove := diffInts(have, want)
+		for _, key := range remove {
+			if err := r.client.Baremetal.RemoveSSHKey(ctx, id, int(key)); err != nil && !isNotFound(err) {
+				diags.AddError("Error removing SSH key from Baremetal", err.Error())
+				return
+			}
+		}
+		if len(add) > 0 {
+			keys := make([]int, 0, len(add))
+			for _, key := range add {
+				keys = append(keys, int(key))
+			}
+			if err := r.client.Baremetal.AddSSHKeys(ctx, id, keys); err != nil {
+				diags.AddError("Error adding SSH keys to Baremetal", err.Error())
+				return
+			}
+		}
+	}
+
+	if !plan.NetworkID.IsUnknown() && !plan.NetworkID.Equal(prior.NetworkID) {
+		if !prior.NetworkID.IsNull() && prior.NetworkID.ValueInt64() != 0 {
+			if err := r.client.Baremetal.DetachNetwork(ctx, id); err != nil {
+				diags.AddError("Error detaching private network", err.Error())
+				return
+			}
+		}
+		if networkID := knownInt(plan.NetworkID); networkID != nil && *networkID != 0 {
+			err := retryWhile(ctx, 5*time.Minute, 10*time.Second, isConflict, func() error {
+				return r.client.Baremetal.AttachNetwork(ctx, id, *networkID)
+			})
+			if err != nil {
+				diags.AddError("Error attaching private network", err.Error())
+			}
 		}
 	}
 }

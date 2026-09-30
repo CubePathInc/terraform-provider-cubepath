@@ -39,6 +39,10 @@ func (b *BaremetalService) Get(ctx context.Context, baremetalID int) (*Baremetal
 	for _, projectResp := range projects {
 		for _, baremetal := range projectResp.Baremetals {
 			if baremetal.ID == baremetalID {
+				// project_id is not included in the nested baremetal objects
+				if baremetal.ProjectID == 0 {
+					baremetal.ProjectID = projectResp.Project.ID
+				}
 				return &baremetal, nil
 			}
 		}
@@ -156,4 +160,93 @@ func (b *BaremetalService) WaitForBaremetalStatus(ctx context.Context, baremetal
 	}
 
 	return result.(*Baremetal), nil
+}
+
+// SetProtection enables or disables protection. A protected server cannot be reinstalled.
+func (b *BaremetalService) SetProtection(ctx context.Context, baremetalID int, enabled bool) error {
+	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/%d/protection", baremetalID), map[string]bool{"enabled": enabled}, nil)
+	if err != nil {
+		return fmt.Errorf("failed to change baremetal protection: %w", err)
+	}
+	return nil
+}
+
+// MoveProject moves a baremetal server to another project of the organization
+func (b *BaremetalService) MoveProject(ctx context.Context, baremetalID, projectID int) error {
+	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/%d/move-project", baremetalID), map[string]int{"project_id": projectID}, nil)
+	if err != nil {
+		return fmt.Errorf("failed to move baremetal to project %d: %w", projectID, err)
+	}
+	return nil
+}
+
+// AddSSHKeys attaches SSH keys to a baremetal server. The keys are installed on the next reinstall.
+func (b *BaremetalService) AddSSHKeys(ctx context.Context, baremetalID int, keyIDs []int) error {
+	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/%d/ssh-keys", baremetalID), keyIDs, nil)
+	if err != nil {
+		return fmt.Errorf("failed to add SSH keys to baremetal: %w", err)
+	}
+	return nil
+}
+
+// RemoveSSHKey detaches an SSH key from a baremetal server
+func (b *BaremetalService) RemoveSSHKey(ctx context.Context, baremetalID, keyID int) error {
+	err := b.client.Delete(ctx, fmt.Sprintf("/baremetal/%d/ssh-keys/%d", baremetalID, keyID))
+	if err != nil {
+		return fmt.Errorf("failed to remove SSH key %d from baremetal: %w", keyID, err)
+	}
+	return nil
+}
+
+// AttachNetwork attaches a private network to a baremetal server
+func (b *BaremetalService) AttachNetwork(ctx context.Context, baremetalID, networkID int) error {
+	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/%d/network", baremetalID), map[string]int{"network_id": networkID}, nil)
+	if err != nil {
+		return fmt.Errorf("failed to attach network to baremetal: %w", err)
+	}
+	return nil
+}
+
+// DetachNetwork detaches the private network from a baremetal server
+func (b *BaremetalService) DetachNetwork(ctx context.Context, baremetalID int) error {
+	err := b.client.Delete(ctx, fmt.Sprintf("/baremetal/%d/network", baremetalID))
+	if err != nil {
+		return fmt.Errorf("failed to detach network from baremetal: %w", err)
+	}
+	return nil
+}
+
+// BaremetalModelOffer is a server model on sale in a location
+type BaremetalModelOffer struct {
+	ModelName      string  `json:"model_name"`
+	Price          float64 `json:"price"`
+	DiscountValue  float64 `json:"discount_value"`
+	DiscountType   string  `json:"discount_type"`
+	CPU            string  `json:"cpu"`
+	CPUSpecs       string  `json:"cpu_specs"`
+	RAMSize        int     `json:"ram_size"`
+	RAMType        string  `json:"ram_type"`
+	DiskSize       string  `json:"disk_size"`
+	DiskType       string  `json:"disk_type"`
+	Port           int     `json:"port"`
+	Setup          float64 `json:"setup"`
+	StockAvailable int     `json:"stock_available"`
+}
+
+// BaremetalModelLocation groups the models on sale in a location
+type BaremetalModelLocation struct {
+	LocationName string                `json:"location_name"`
+	Description  string                `json:"description"`
+	Models       []BaremetalModelOffer `json:"models"`
+}
+
+// ListModels lists the server models on sale per location, with price and stock
+func (b *BaremetalService) ListModels(ctx context.Context) ([]BaremetalModelLocation, error) {
+	var result struct {
+		Locations []BaremetalModelLocation `json:"locations"`
+	}
+	if err := b.client.Get(ctx, "/baremetal/models", &result); err != nil {
+		return nil, fmt.Errorf("failed to list baremetal models: %w", err)
+	}
+	return result.Locations, nil
 }

@@ -8,7 +8,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -56,20 +55,25 @@ func (r *availabilityGroupResource) Schema(_ context.Context, _ resource.SchemaR
 				},
 			},
 			"project_id": schema.Int64Attribute{
-				Description: "The ID of the project this availability group belongs to.",
+				Description: "The ID of the project this availability group belongs to. Changing it moves the group in place.",
 				Required:    true,
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.RequiresReplace(),
-				},
 			},
 			"name": schema.StringAttribute{
-				Description: "The name of the availability group. Must be unique per project.",
+				Description: "The name of the availability group. Must be unique per project. Changing it forces a new group.",
 				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"description": schema.StringAttribute{
-				Description: "A description of the availability group.",
+				Description: "A description of the availability group. Changing it forces a new group.",
 				Optional:    true,
 				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.RequiresReplaceIf(requiresReplaceIfConfiguredString,
+						"Changing the description forces a new group.", "Changing the description forces a new group."),
+				},
 			},
 			"location_name": schema.StringAttribute{
 				Description: "The location where the availability group operates (e.g., 'us-mia-1').",
@@ -136,6 +140,13 @@ func (r *availabilityGroupResource) Create(ctx context.Context, req resource.Cre
 		}
 		created, err := r.client.AvailabilityGroups.Create(ctx, createReq)
 		if err != nil {
+			// The API can answer 5xx after creating the group; the retry then reports it as a
+			// duplicate. Use the group if it is there now.
+			if found, findErr := r.client.AvailabilityGroups.FindByName(ctx, createReq.ProjectID, createReq.Name); findErr == nil {
+				created, err = found, nil
+			}
+		}
+		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error creating availability group",
 				"Could not create availability group, unexpected error: "+err.Error(),
@@ -151,7 +162,7 @@ func (r *availabilityGroupResource) Create(ctx context.Context, req resource.Cre
 	plan.VPSCount = types.Int64Value(int64(group.VPSCount))
 	plan.CreatedAt = types.StringValue(group.CreatedAt)
 	// Keep plan description — the API create response may not echo it back
-	if group.Description != "" {
+	if group.Description != "" || plan.Description.IsUnknown() {
 		plan.Description = types.StringValue(group.Description)
 	}
 
@@ -172,7 +183,7 @@ func (r *availabilityGroupResource) Read(ctx context.Context, req resource.ReadR
 
 	group, err := r.client.AvailabilityGroups.Get(ctx, state.ID.ValueString())
 	if err != nil {
-		if apiErr, ok := err.(*client.APIError); ok && apiErr.IsNotFound() {
+		if isNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -195,14 +206,34 @@ func (r *availabilityGroupResource) Read(ctx context.Context, req resource.ReadR
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update only moves the group to another project: every other attribute forces a new group.
 func (r *availabilityGroupResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// The API does not support updating availability groups.
-	// Name changes require destroy and recreate.
-	// project_id and location_name have RequiresReplace so they trigger recreation.
-	resp.Diagnostics.AddError(
-		"Update not supported",
-		"Availability groups cannot be updated. Changes require resource replacement.",
-	)
+	var plan, state availabilityGroupResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if !plan.ProjectID.Equal(state.ProjectID) {
+		if err := r.client.AvailabilityGroups.MoveProject(ctx, state.ID.ValueString(), int(plan.ProjectID.ValueInt64())); err != nil {
+			resp.Diagnostics.AddError("Error moving availability group", err.Error())
+			return
+		}
+	}
+
+	group, err := r.client.AvailabilityGroups.Get(ctx, state.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading availability group", err.Error())
+		return
+	}
+	plan.ProjectID = types.Int64Value(int64(group.ProjectID))
+	plan.Strategy = types.StringValue(group.Strategy)
+	plan.MaxServers = types.Int64Value(int64(group.MaxServers))
+	plan.VPSCount = types.Int64Value(int64(group.VPSCount))
+	plan.CreatedAt = types.StringValue(group.CreatedAt)
+	plan.ID = state.ID
+	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
 func (r *availabilityGroupResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

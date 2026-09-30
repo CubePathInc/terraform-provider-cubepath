@@ -183,3 +183,8 @@ func (c *CDNService) UpdateWAFRule(ctx context.Context, zoneUUID, ruleUUID strin
 func (c *CDNService) DeleteWAFRule(ctx context.Context, zoneUUID, ruleUUID string) error {
 	return c.client.Delete(ctx, fmt.Sprintf("/cdn/zones/%s/waf-rules/%s", zoneUUID, ruleUUID))
 }
+
+// MoveZone moves a zone to another project of the organization
+func (c *CDNService) MoveZone(ctx context.Context, uuid string, projectID int) error {
+	return c.client.Post(ctx, fmt.Sprintf("/cdn/zones/%s/move-project", uuid), map[string]int{"project_id": projectID}, nil)
+}

@@ -60,7 +60,7 @@ func (r *sshKeyResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				},
 			},
 			"name": schema.StringAttribute{
-				Description: "The name of the SSH key.",
+				Description: "The name of the SSH key. Can be changed in place.",
 				Required:    true,
 			},
 			"public_key": schema.StringAttribute{
@@ -204,23 +204,31 @@ func (r *sshKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 // Update updates the resource and sets the updated Terraform state on success.
 func (r *sshKeyResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// Note: SSH keys don't support updates in the CubePath API
-	// The public_key has RequiresReplace, so any change will recreate the resource
-	// The name field could potentially be updated, but the API doesn't support it
-	// So for now, we just copy the plan to state
-
-	var plan sshKeyResourceModel
+	// Only the name changes in place; public_key has RequiresReplace.
+	var plan, state sshKeyResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Since CubePath API doesn't support updating SSH keys,
-	// we would need to delete and recreate, which is handled by RequiresReplace
-	resp.Diagnostics.AddError(
-		"Update Not Supported",
-		"SSH keys cannot be updated. Any changes require recreating the resource.",
-	)
+	id, err := strconv.Atoi(state.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Error parsing SSH key ID", err.Error())
+		return
+	}
+	if !plan.Name.Equal(state.Name) {
+		if err := r.client.SSHKeys.Update(ctx, id, plan.Name.ValueString()); err != nil {
+			resp.Diagnostics.AddError("Error renaming SSH key", err.Error())
+			return
+		}
+	}
+
+	plan.ID = state.ID
+	plan.Fingerprint = state.Fingerprint
+	plan.KeyType = state.KeyType
+	plan.CreatedAt = state.CreatedAt
+	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
 // Delete deletes the resource and removes the Terraform state on success.

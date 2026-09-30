@@ -29,6 +29,13 @@ type CDNZone struct {
 	Rules        []CDNRule   `json:"rules"`
 	CreatedAt    string      `json:"created_at"`
 	UpdatedAt    string      `json:"updated_at"`
+
+	// Token Auth and CORS. The secret is only returned to callers with cdn:write.
+	TokenAuthEnabled   bool    `json:"token_auth_enabled"`
+	TokenAuthIPBinding bool    `json:"token_auth_ip_binding"`
+	TokenAuthSecret    *string `json:"token_auth_secret"`
+	CORSEnabled        bool    `json:"cors_enabled"`
+	CORSAllowOrigins   *string `json:"cors_allow_origins"`
 }
 
 // CDNOrigin represents a CDN origin server
@@ -82,6 +89,11 @@ type UpdateCDNZoneRequest struct {
 	CustomDomain    *string `json:"custom_domain,omitempty"`
 	SSLType         *string `json:"ssl_type,omitempty"`
 	CertificateUUID *string `json:"certificate_uuid,omitempty"`
+	// Nil booleans are left as they are
+	TokenAuthEnabled   *bool   `json:"token_auth_enabled,omitempty"`
+	TokenAuthIPBinding *bool   `json:"token_auth_ip_binding,omitempty"`
+	CORSEnabled        *bool   `json:"cors_enabled,omitempty"`
+	CORSAllowOrigins   *string `json:"cors_allow_origins,omitempty"`
 }
 
 // CreateCDNOriginRequest represents a request to create a CDN origin
