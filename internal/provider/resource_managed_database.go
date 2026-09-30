@@ -140,7 +140,7 @@ func (r *managedDatabaseResource) Schema(ctx context.Context, _ resource.SchemaR
 					"The API cannot clear a schedule once set; disable backups with backup_enabled = false instead.",
 				Optional:      true,
 				Computed:      true,
-				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+				PlanModifiers: []planmodifier.String{keepStateWhenUnset{}},
 			},
 			"backup_retention_days": schema.Int64Attribute{
 				Description:   "Days to keep each backup, 1 to 365. Defaults to 7.",
@@ -168,12 +168,14 @@ func (r *managedDatabaseResource) Schema(ctx context.Context, _ resource.SchemaR
 				Computed:    true,
 			},
 			"endpoint_host": schema.StringAttribute{
-				Description: "Public address to connect to.",
-				Computed:    true,
+				Description:   "Public address to connect to.",
+				Computed:      true,
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"endpoint_port": schema.Int64Attribute{
-				Description: "Port to connect to (3306 mysql, 5432 postgresql, 6379 valkey).",
-				Computed:    true,
+				Description:   "Port to connect to (3306 mysql, 5432 postgresql, 6379 valkey).",
+				Computed:      true,
+				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
 			},
 			"plan_name": schema.StringAttribute{
 				Description: "Name of the plan.",

@@ -178,3 +178,23 @@ func knownBool(v types.Bool) *bool {
 func requiresReplaceIfRemovedInt64(_ context.Context, req planmodifier.Int64Request, resp *int64planmodifier.RequiresReplaceIfFuncResponse) {
 	resp.RequiresReplace = req.ConfigValue.IsNull() && !req.StateValue.IsNull()
 }
+
+// keepStateWhenUnset plans the prior state value (null included) when the attribute is not
+// configured. UseStateForUnknown leaves a null prior value as "known after apply", which
+// shows noise on every update.
+type keepStateWhenUnset struct{}
+
+func (m keepStateWhenUnset) Description(_ context.Context) string {
+	return "Keeps the current value when the attribute is not configured."
+}
+
+func (m keepStateWhenUnset) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (m keepStateWhenUnset) PlanModifyString(_ context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if req.State.Raw.IsNull() || !req.ConfigValue.IsNull() {
+		return
+	}
+	resp.PlanValue = req.StateValue
+}
