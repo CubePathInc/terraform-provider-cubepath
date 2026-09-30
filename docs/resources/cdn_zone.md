@@ -22,9 +22,13 @@ Manages a CDN zone on CubePath Cloud.
 
 ### Optional
 
+- `cors_allow_origins` (String) Allowed origins: "*" or a comma separated list of up to 50 origins (https://example.com).
+- `cors_enabled` (Boolean) Add CORS headers to responses. If omitted, the current setting is kept.
 - `custom_domain` (String) Custom domain for the CDN zone.
-- `project_id` (Number) The project ID.
+- `project_id` (Number) The project ID. Changing it moves the zone in place.
 - `ssl_type` (String) SSL type: automatic or custom.
+- `token_auth_enabled` (Boolean) Token Auth: only serve requests with a valid signed URL. The first time it is enabled the zone gets a signing secret (token_auth_secret). If omitted, the current setting is kept.
+- `token_auth_ip_binding` (Boolean) Bind signed URLs to the client IP. If omitted, the current setting is kept.
 
 ### Read-Only
 
@@ -32,4 +36,5 @@ Manages a CDN zone on CubePath Cloud.
 - `domain` (String) The CDN domain assigned to the zone.
 - `id` (String) The UUID of the CDN zone.
 - `status` (String) Current status of the CDN zone.
+- `token_auth_secret` (String, Sensitive) Secret used to sign URLs when Token Auth is enabled. Needs an API token with cdn:write.
 - `updated_at` (String) When the zone was last updated.

@@ -8,6 +8,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -38,6 +40,12 @@ type cdnZoneResourceModel struct {
 	Status       types.String `tfsdk:"status"`
 	CreatedAt    types.String `tfsdk:"created_at"`
 	UpdatedAt    types.String `tfsdk:"updated_at"`
+
+	TokenAuthEnabled   types.Bool   `tfsdk:"token_auth_enabled"`
+	TokenAuthIPBinding types.Bool   `tfsdk:"token_auth_ip_binding"`
+	TokenAuthSecret    types.String `tfsdk:"token_auth_secret"`
+	CORSEnabled        types.Bool   `tfsdk:"cors_enabled"`
+	CORSAllowOrigins   types.String `tfsdk:"cors_allow_origins"`
 }
 
 func (r *cdnZoneResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -81,9 +89,46 @@ func (r *cdnZoneResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Computed:    true,
 			},
 			"project_id": schema.Int64Attribute{
-				Description: "The project ID.",
+				Description: "The project ID. Changing it moves the zone in place.",
 				Optional:    true,
 				Computed:    true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
+			},
+			"token_auth_enabled": schema.BoolAttribute{
+				Description: "Token Auth: only serve requests with a valid signed URL. The first time it is enabled the " +
+					"zone gets a signing secret (token_auth_secret). If omitted, the current setting is kept.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"token_auth_ip_binding": schema.BoolAttribute{
+				Description: "Bind signed URLs to the client IP. If omitted, the current setting is kept.",
+				Optional:    true,
+				Computed:    true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"token_auth_secret": schema.StringAttribute{
+				Description: "Secret used to sign URLs when Token Auth is enabled. Needs an API token with cdn:write.",
+				Computed:    true,
+				Sensitive:   true,
+			},
+			"cors_enabled": schema.BoolAttribute{
+				Description: "Add CORS headers to responses. If omitted, the current setting is kept.",
+				Optional:    true,
+				Computed:    true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"cors_allow_origins": schema.StringAttribute{
+				Description: "Allowed origins: \"*\" or a comma separated list of up to 50 origins (https://example.com).",
+				Optional:    true,
 			},
 			"status": schema.StringAttribute{
 				Description: "Current status of the CDN zone.",
@@ -139,6 +184,29 @@ func (r *cdnZoneResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
+	// Token Auth and CORS are not part of the create request.
+	settings := &client.UpdateCDNZoneRequest{
+		TokenAuthEnabled:   knownBool(plan.TokenAuthEnabled),
+		TokenAuthIPBinding: knownBool(plan.TokenAuthIPBinding),
+		CORSEnabled:        knownBool(plan.CORSEnabled),
+		CORSAllowOrigins:   knownString(plan.CORSAllowOrigins),
+	}
+	if settings.TokenAuthEnabled != nil || settings.TokenAuthIPBinding != nil || settings.CORSEnabled != nil || settings.CORSAllowOrigins != nil {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), zone.UUID)...)
+		if err := r.client.CDN.UpdateZone(ctx, zone.UUID, settings); err != nil {
+			resp.Diagnostics.AddError("Error configuring CDN zone Token Auth and CORS", err.Error())
+			return
+		}
+		project := zone.ProjectID
+		if zone, err = r.client.CDN.GetZone(ctx, zone.UUID); err != nil {
+			resp.Diagnostics.AddError("Error reading CDN zone", err.Error())
+			return
+		}
+		if zone.ProjectID == 0 {
+			zone.ProjectID = project
+		}
+	}
+
 	r.mapToState(&plan, zone)
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
@@ -152,7 +220,7 @@ func (r *cdnZoneResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	zone, err := r.client.CDN.GetZone(ctx, state.ID.ValueString())
 	if err != nil {
-		if apiErr, ok := err.(*client.APIError); ok && apiErr.IsNotFound() {
+		if isNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -189,6 +257,30 @@ func (r *cdnZoneResource) Update(ctx context.Context, req resource.UpdateRequest
 		v := plan.SSLType.ValueString()
 		updateReq.SSLType = &v
 		changed = true
+	}
+	if !plan.TokenAuthEnabled.IsUnknown() && !plan.TokenAuthEnabled.Equal(state.TokenAuthEnabled) {
+		updateReq.TokenAuthEnabled = knownBool(plan.TokenAuthEnabled)
+		changed = true
+	}
+	if !plan.TokenAuthIPBinding.IsUnknown() && !plan.TokenAuthIPBinding.Equal(state.TokenAuthIPBinding) {
+		updateReq.TokenAuthIPBinding = knownBool(plan.TokenAuthIPBinding)
+		changed = true
+	}
+	if !plan.CORSEnabled.IsUnknown() && !plan.CORSEnabled.Equal(state.CORSEnabled) {
+		updateReq.CORSEnabled = knownBool(plan.CORSEnabled)
+		changed = true
+	}
+	if !plan.CORSAllowOrigins.Equal(state.CORSAllowOrigins) {
+		v := plan.CORSAllowOrigins.ValueString() // "" clears the list
+		updateReq.CORSAllowOrigins = &v
+		changed = true
+	}
+
+	if !plan.ProjectID.IsUnknown() && !plan.ProjectID.Equal(state.ProjectID) {
+		if err := r.client.CDN.MoveZone(ctx, state.ID.ValueString(), int(plan.ProjectID.ValueInt64())); err != nil {
+			resp.Diagnostics.AddError("Error moving CDN zone", err.Error())
+			return
+		}
 	}
 
 	if changed {
@@ -245,4 +337,12 @@ func (r *cdnZoneResource) mapToState(state *cdnZoneResourceModel, zone *client.C
 	state.Status = types.StringValue(zone.Status)
 	state.CreatedAt = types.StringValue(zone.CreatedAt)
 	state.UpdatedAt = types.StringValue(zone.UpdatedAt)
+	state.TokenAuthEnabled = types.BoolValue(zone.TokenAuthEnabled)
+	state.TokenAuthIPBinding = types.BoolValue(zone.TokenAuthIPBinding)
+	// The create response carries no secret: keep the one already known.
+	if zone.TokenAuthSecret != nil || state.TokenAuthSecret.IsUnknown() {
+		state.TokenAuthSecret = stringOrNull(zone.TokenAuthSecret)
+	}
+	state.CORSEnabled = types.BoolValue(zone.CORSEnabled)
+	state.CORSAllowOrigins = stringOrNull(zone.CORSAllowOrigins)
 }

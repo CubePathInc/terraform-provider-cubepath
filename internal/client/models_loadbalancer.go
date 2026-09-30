@@ -15,6 +15,7 @@ type LoadBalancer struct {
 	Listeners      []LBListener   `json:"listeners"`
 	ListenersCount int            `json:"listeners_count"`
 	ProjectID      int            `json:"project_id"`
+	Protected      bool           `json:"protected"`
 	CreatedAt      string         `json:"created_at"`
 }
 
@@ -72,11 +73,13 @@ type LBLocationPlans struct {
 type HealthCheckConfig struct {
 	Protocol           string `json:"protocol"`
 	Path               string `json:"path"`
+	Port               *int   `json:"port"`
 	IntervalSeconds    int    `json:"interval_seconds"`
 	TimeoutSeconds     int    `json:"timeout_seconds"`
 	HealthyThreshold   int    `json:"healthy_threshold"`
 	UnhealthyThreshold int    `json:"unhealthy_threshold"`
 	ExpectedCodes      string `json:"expected_codes"`
+	HTTPMethod         string `json:"http_method,omitempty"`
 }
 
 // CreateLoadBalancerRequest represents a request to create a load balancer
@@ -119,6 +122,7 @@ type AddTargetRequest struct {
 	TargetUUID string `json:"target_uuid"`
 	Port       *int   `json:"port,omitempty"`
 	Weight     int    `json:"weight"`
+	Enabled    *bool  `json:"enabled,omitempty"`
 }
 
 // UpdateTargetRequest represents a request to update a target

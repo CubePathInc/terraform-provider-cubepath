@@ -115,3 +115,31 @@ func (n *NATGatewayService) ListPlans(ctx context.Context) ([]NATGatewayPlan, er
 	}
 	return result, nil
 }
+
+// List retrieves the organization's NAT gateways
+func (n *NATGatewayService) List(ctx context.Context) ([]NATGateway, error) {
+	var result []NATGateway
+	err := n.client.Get(ctx, "/nat-gateway/", &result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list NAT gateways: %w", err)
+	}
+	return result, nil
+}
+
+// SetProtection enables or disables deletion protection
+func (n *NATGatewayService) SetProtection(ctx context.Context, uuid string, enabled bool) error {
+	err := n.client.Post(ctx, fmt.Sprintf("/nat-gateway/%s/protection", uuid), map[string]bool{"enabled": enabled}, nil)
+	if err != nil {
+		return fmt.Errorf("failed to change NAT gateway protection: %w", err)
+	}
+	return nil
+}
+
+// MoveProject moves a NAT gateway to another project of the organization
+func (n *NATGatewayService) MoveProject(ctx context.Context, uuid string, projectID int) error {
+	err := n.client.Post(ctx, fmt.Sprintf("/nat-gateway/%s/move-to-project", uuid), map[string]int{"project_id": projectID}, nil)
+	if err != nil {
+		return fmt.Errorf("failed to move NAT gateway to project %d: %w", projectID, err)
+	}
+	return nil
+}

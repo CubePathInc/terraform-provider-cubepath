@@ -130,3 +130,12 @@ func (s *SSHKeys) Delete(ctx context.Context, id int) error {
 	}
 	return nil
 }
+
+// Update renames an SSH key
+func (s *SSHKeys) Update(ctx context.Context, id int, name string) error {
+	err := s.client.Put(ctx, fmt.Sprintf("/sshkey/%d", id), map[string]string{"name": name}, nil)
+	if err != nil {
+		return fmt.Errorf("failed to update SSH key: %w", err)
+	}
+	return nil
+}

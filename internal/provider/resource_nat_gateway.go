@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -37,6 +38,7 @@ type natGatewayResourceModel struct {
 	ProjectID    types.Int64  `tfsdk:"project_id"`
 	Status       types.String `tfsdk:"status"`
 	LocationName types.String `tfsdk:"location_name"`
+	Protected    types.Bool   `tfsdk:"protected"`
 	CreatedAt    types.String `tfsdk:"created_at"`
 }
 
@@ -76,12 +78,20 @@ func (r *natGatewayResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				},
 			},
 			"project_id": schema.Int64Attribute{
-				Description: "The project ID. Uses default project if not specified. Requires replacement if changed.",
+				Description: "The project ID. Uses default project if not specified. Changing it moves the NAT gateway in place.",
 				Optional:    true,
 				Computed:    true,
 				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.RequiresReplace(),
 					int64planmodifier.UseStateForUnknown(),
+				},
+			},
+			"protected": schema.BoolAttribute{
+				Description: "Deletion protection. A protected NAT gateway cannot be destroyed until this is set to " +
+					"false. If omitted, the current setting is kept.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"status": schema.StringAttribute{
@@ -145,6 +155,13 @@ func (r *natGatewayResource) Create(ctx context.Context, req resource.CreateRequ
 		resp.Diagnostics.AddError("Error creating NAT gateway", err.Error())
 		return
 	}
+	if plan.Protected.ValueBool() {
+		if err := r.client.NATGateway.SetProtection(ctx, gw.UUID, true); err != nil {
+			resp.Diagnostics.AddError("Error enabling NAT gateway protection", err.Error())
+			return
+		}
+		gw.Protected = true
+	}
 
 	r.mapToState(&plan, gw)
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
@@ -159,7 +176,7 @@ func (r *natGatewayResource) Read(ctx context.Context, req resource.ReadRequest,
 
 	gw, err := r.client.NATGateway.Get(ctx, state.ID.ValueString())
 	if err != nil {
-		if apiErr, ok := err.(*client.APIError); ok && apiErr.IsNotFound() {
+		if isNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -177,6 +194,19 @@ func (r *natGatewayResource) Update(ctx context.Context, req resource.UpdateRequ
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	if !plan.ProjectID.IsUnknown() && !plan.ProjectID.Equal(state.ProjectID) {
+		if err := r.client.NATGateway.MoveProject(ctx, state.ID.ValueString(), int(plan.ProjectID.ValueInt64())); err != nil {
+			resp.Diagnostics.AddError("Error moving NAT gateway", err.Error())
+			return
+		}
+	}
+	if want := knownBool(plan.Protected); want != nil && !plan.Protected.Equal(state.Protected) {
+		if err := r.client.NATGateway.SetProtection(ctx, state.ID.ValueString(), *want); err != nil {
+			resp.Diagnostics.AddError("Error changing NAT gateway protection", err.Error())
+			return
+		}
 	}
 
 	// Resize if plan_name changed
@@ -244,5 +274,6 @@ func (r *natGatewayResource) mapToState(state *natGatewayResourceModel, gw *clie
 	state.NetworkID = types.Int64Value(int64(gw.NetworkID))
 	state.ProjectID = types.Int64Value(int64(gw.ProjectID))
 	state.LocationName = types.StringValue(gw.LocationName)
+	state.Protected = types.BoolValue(gw.Protected)
 	state.CreatedAt = types.StringValue(gw.CreatedAt)
 }

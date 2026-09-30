@@ -20,22 +20,27 @@ Manages a VPS instance on CubePath Cloud.
 - `location` (String) The location where the VPS will be created (e.g., 'us-mia-1').
 - `name` (String) The hostname of the VPS. Can be changed in place.
 - `plan_name` (String) The plan name for the VPS (e.g., 'gp.pro').
-- `project_id` (Number) The project ID to associate the VPS with.
+- `project_id` (Number) The project ID to associate the VPS with. Changing it moves the VPS to the other project in place.
 - `template_name` (String) The operating system template (e.g., 'debian-12').
 
 ### Optional
 
-- `availability_group_uuid` (String) UUID of the availability group to place this VPS in. VPS in the same availability group are distributed across different physical hosts.
+- `availability_group_uuid` (String) UUID of the availability group to place this VPS in. VPS in the same availability group are distributed across different physical hosts. Changing it moves the VPS between groups in place; set it to an empty string to take the VPS out of its group.
+- `backup_max_backups` (Number) Maximum number of automatic backups kept (1-10). Defaults to 7.
+- `backup_retention_days` (Number) Days automatic backups are kept (1-7). Defaults to 7.
+- `backup_schedule_hour` (Number) UTC hour (0-23) of the daily automatic backup. Defaults to 3.
 - `custom_cloudinit` (String) Custom cloud-init configuration (YAML). Only for Linux templates. The API does not return it, so it is not read back on import.
-- `enable_backups` (Boolean) Enable automatic backups for this VPS. Defaults to false.
+- `enable_backups` (Boolean) Enable automatic backups for this VPS. Defaults to false. Can be changed in place (disabling needs every backup deleted first).
 - `firewall_group_ids` (Set of Number) Set of firewall group IDs to assign to this VPS. If omitted, firewall groups are not managed by Terraform.
 - `ipv4` (Boolean) Enable public IPv4 address (dual-stack). Additional $1.50/month. Defaults to true.
 - `ipv6_enabled` (Boolean) Enable public IPv6 address (free). Defaults to true. Set to false to deploy without any public IP — requires network_id.
+- `iso_id` (String) ID of an ISO image to mount (see the cubepath_vps_isos data source). Set it to an empty string to unmount. If omitted, whatever is mounted is left alone.
 - `label` (String) A label for the VPS. Can be changed in place.
-- `network_id` (Number) Optional private network ID to attach to the VPS.
+- `network_id` (Number) Optional private network ID to attach to the VPS. Changing it detaches the old network and attaches the new one in place; the new interface is active after the VPS restarts. Set it to 0 to detach the network.
 - `password` (String, Sensitive) Root password for the VPS. Required if ssh_key_ids is not provided.
 - `power_state` (String) Desired power state of the VPS. Valid values: 'running', 'stopped'. Changing this will start or stop the VPS.
-- `ssh_key_ids` (Set of Number) Set of SSH key IDs to add to the VPS.
+- `protected` (Boolean) Destruction protection. A protected VPS cannot be destroyed or reinstalled until this is set to false. If omitted, the current setting is kept.
+- `ssh_key_ids` (Set of Number) Set of SSH key IDs to add to the VPS. Changing it attaches and detaches keys in place; the guest only picks up the new keys on its next reinstall.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `user` (String) SSH user for the VPS. Defaults to 'root' for Linux or 'Administrator' for Windows.
 

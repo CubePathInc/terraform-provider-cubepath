@@ -64,13 +64,13 @@ func (r *networkResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Description: "A label for the network.",
 				Optional:    true,
 				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"project_id": schema.Int64Attribute{
-				Description: "The project ID to associate the network with.",
+				Description: "The project ID to associate the network with. Changing it moves the network to the other project in place.",
 				Required:    true,
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.RequiresReplace(),
-				},
 			},
 			"location": schema.StringAttribute{
 				Description: "The location where the network will be created.",
@@ -213,6 +213,9 @@ func (r *networkResource) Read(ctx context.Context, req resource.ReadRequest, re
 	// Update state
 	state.Name = types.StringValue(network.Name)
 	state.Label = types.StringValue(network.Label)
+	if network.ProjectID != 0 {
+		state.ProjectID = types.Int64Value(int64(network.ProjectID))
+	}
 	state.IPRange = types.StringValue(network.IPRange)
 	state.Prefix = types.Int64Value(int64(network.Prefix))
 	state.CIDR = types.StringValue(fmt.Sprintf("%s/%d", network.IPRange, network.Prefix))
@@ -222,8 +225,9 @@ func (r *networkResource) Read(ctx context.Context, req resource.ReadRequest, re
 }
 
 func (r *networkResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan networkResourceModel
+	var plan, state networkResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -237,14 +241,30 @@ func (r *networkResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	// Update network (name and label only)
-	_, err = r.client.Networks.Update(ctx, id, plan.Name.ValueString(), plan.Label.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error updating network",
-			"Could not update network: "+err.Error(),
-		)
-		return
+	if !plan.ProjectID.Equal(state.ProjectID) {
+		if err := r.client.Networks.MoveProject(ctx, id, int(plan.ProjectID.ValueInt64())); err != nil {
+			resp.Diagnostics.AddError("Error moving network", err.Error())
+			return
+		}
+	}
+
+	// Update network (name and label only). The API needs the label in every update.
+	if !plan.Name.Equal(state.Name) || !plan.Label.Equal(state.Label) {
+		label := plan.Label.ValueString()
+		if plan.Label.IsUnknown() || label == "" {
+			label = state.Label.ValueString()
+		}
+		if label == "" {
+			label = plan.Name.ValueString()
+		}
+		_, err = r.client.Networks.Update(ctx, id, plan.Name.ValueString(), label)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error updating network",
+				"Could not update network: "+err.Error(),
+			)
+			return
+		}
 	}
 
 	// Read updated network
@@ -258,6 +278,8 @@ func (r *networkResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	plan.CreatedAt = types.StringValue(network.CreatedAt.String())
+	plan.Label = types.StringValue(network.Label)
+	plan.CIDR = types.StringValue(fmt.Sprintf("%s/%d", network.IPRange, network.Prefix))
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }

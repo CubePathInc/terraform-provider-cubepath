@@ -333,3 +333,22 @@ func (k *KubernetesService) WaitForClusterDestroy(ctx context.Context, uuid stri
 	_, err := stateConf.WaitForState(ctx)
 	return err
 }
+
+// SetProtection enables or disables deletion protection of a cluster
+func (k *KubernetesService) SetProtection(ctx context.Context, uuid string, enabled bool) error {
+	return k.client.Post(ctx, fmt.Sprintf("/kubernetes/%s/protection", uuid), map[string]bool{"enabled": enabled}, nil)
+}
+
+// MoveProject moves a cluster (and its workers) to another project of the organization
+func (k *KubernetesService) MoveProject(ctx context.Context, uuid string, projectID int) error {
+	return k.client.Post(ctx, fmt.Sprintf("/kubernetes/%s/move", uuid), map[string]int{"project_id": projectID}, nil)
+}
+
+// ListLoadBalancers lists the load balancers that target the node pools of a cluster
+func (k *KubernetesService) ListLoadBalancers(ctx context.Context, uuid string) ([]KubernetesLoadBalancer, error) {
+	var result []KubernetesLoadBalancer
+	if err := k.client.Get(ctx, fmt.Sprintf("/kubernetes/%s/loadbalancers", uuid), &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}

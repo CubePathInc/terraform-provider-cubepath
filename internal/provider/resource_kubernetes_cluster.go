@@ -51,6 +51,7 @@ type kubernetesClusterResourceModel struct {
 	AllocateIPv6     types.Bool   `tfsdk:"allocate_ipv6"`
 	Status           types.String `tfsdk:"status"`
 	APIEndpoint      types.String `tfsdk:"api_endpoint"`
+	Protected        types.Bool   `tfsdk:"protected"`
 	CreatedAt        types.String `tfsdk:"created_at"`
 }
 
@@ -79,10 +80,16 @@ func (r *kubernetesClusterResource) Schema(_ context.Context, _ resource.SchemaR
 				Computed:    true,
 			},
 			"project_id": schema.Int64Attribute{
-				Description: "The project ID to create the cluster in.",
+				Description: "The project ID to create the cluster in. Changing it moves the cluster and its workers in place.",
 				Required:    true,
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.RequiresReplace(),
+			},
+			"protected": schema.BoolAttribute{
+				Description: "Deletion protection. A protected cluster cannot be destroyed until this is set to false. " +
+					"If omitted, the current setting is kept.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"location": schema.StringAttribute{
@@ -281,6 +288,14 @@ func (r *kubernetesClusterResource) Create(ctx context.Context, req resource.Cre
 		}
 	}
 
+	if plan.Protected.ValueBool() {
+		if err := r.client.Kubernetes.SetProtection(ctx, cluster.UUID, true); err != nil {
+			resp.Diagnostics.AddError("Error enabling cluster protection", err.Error())
+			return
+		}
+		cluster.Protected = true
+	}
+
 	r.mapClusterToState(&plan, cluster)
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
@@ -312,6 +327,19 @@ func (r *kubernetesClusterResource) Update(ctx context.Context, req resource.Upd
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	if !plan.ProjectID.Equal(state.ProjectID) {
+		if err := r.client.Kubernetes.MoveProject(ctx, state.ID.ValueString(), int(plan.ProjectID.ValueInt64())); err != nil {
+			resp.Diagnostics.AddError("Error moving Kubernetes cluster", err.Error())
+			return
+		}
+	}
+	if want := knownBool(plan.Protected); want != nil && !plan.Protected.Equal(state.Protected) {
+		if err := r.client.Kubernetes.SetProtection(ctx, state.ID.ValueString(), *want); err != nil {
+			resp.Diagnostics.AddError("Error changing cluster protection", err.Error())
+			return
+		}
 	}
 
 	updateReq := &client.UpdateKubernetesClusterRequest{}
@@ -401,6 +429,7 @@ func (r *kubernetesClusterResource) mapClusterToState(state *kubernetesClusterRe
 	state.ServiceCIDR = types.StringValue(cluster.ServiceCIDR)
 	state.Location = types.StringValue(cluster.Location.LocationName)
 	state.CreatedAt = types.StringValue(cluster.CreatedAt)
+	state.Protected = types.BoolValue(cluster.Protected)
 
 	if cluster.Label != "" {
 		state.Label = types.StringValue(cluster.Label)

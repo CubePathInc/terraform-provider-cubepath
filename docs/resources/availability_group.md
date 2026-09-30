@@ -18,12 +18,12 @@ Manages an availability group on CubePath Cloud. VPS instances in the same avail
 ### Required
 
 - `location_name` (String) The location where the availability group operates (e.g., 'us-mia-1').
-- `name` (String) The name of the availability group. Must be unique per project.
-- `project_id` (Number) The ID of the project this availability group belongs to.
+- `name` (String) The name of the availability group. Must be unique per project. Changing it forces a new group.
+- `project_id` (Number) The ID of the project this availability group belongs to. Changing it moves the group in place.
 
 ### Optional
 
-- `description` (String) A description of the availability group.
+- `description` (String) A description of the availability group. Changing it forces a new group.
 
 ### Read-Only
 

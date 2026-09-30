@@ -54,6 +54,11 @@ type vpsResourceModel struct {
 	CustomCloudInit       types.String   `tfsdk:"custom_cloudinit"`
 	FirewallGroupIDs      types.Set      `tfsdk:"firewall_group_ids"`
 	AvailabilityGroupUUID types.String   `tfsdk:"availability_group_uuid"`
+	Protected             types.Bool     `tfsdk:"protected"`
+	ISOID                 types.String   `tfsdk:"iso_id"`
+	BackupScheduleHour    types.Int64    `tfsdk:"backup_schedule_hour"`
+	BackupRetentionDays   types.Int64    `tfsdk:"backup_retention_days"`
+	BackupMaxBackups      types.Int64    `tfsdk:"backup_max_backups"`
 	PowerState            types.String   `tfsdk:"power_state"`
 	Status                types.String   `tfsdk:"status"`
 	MainIP                types.String   `tfsdk:"main_ip"`
@@ -96,11 +101,8 @@ func (r *vpsResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 			"project_id": schema.Int64Attribute{
-				Description: "The project ID to associate the VPS with.",
+				Description: "The project ID to associate the VPS with. Changing it moves the VPS to the other project in place.",
 				Required:    true,
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.RequiresReplace(),
-				},
 			},
 			"location": schema.StringAttribute{
 				Description: "The location where the VPS will be created (e.g., 'us-mia-1').",
@@ -121,26 +123,23 @@ func (r *vpsResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 			"network_id": schema.Int64Attribute{
-				Description: "Optional private network ID to attach to the VPS.",
-				Optional:    true,
-				Computed:    true,
+				Description: "Optional private network ID to attach to the VPS. Changing it detaches the old network and " +
+					"attaches the new one in place; the new interface is active after the VPS restarts. " +
+					"Set it to 0 to detach the network.",
+				Optional: true,
+				Computed: true,
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.UseStateForUnknown(),
-					int64planmodifier.RequiresReplaceIf(requiresReplaceIfConfiguredInt64,
-						"Changing the network requires replacing the VPS.",
-						"Changing the network requires replacing the VPS."),
 				},
 			},
 			"ssh_key_ids": schema.SetAttribute{
-				Description: "Set of SSH key IDs to add to the VPS.",
+				Description: "Set of SSH key IDs to add to the VPS. Changing it attaches and detaches keys in place; " +
+					"the guest only picks up the new keys on its next reinstall.",
 				Optional:    true,
 				Computed:    true,
 				ElementType: types.Int64Type,
 				PlanModifiers: []planmodifier.Set{
 					setplanmodifier.UseStateForUnknown(),
-					setplanmodifier.RequiresReplaceIf(requiresReplaceIfConfiguredSet,
-						"Changing the SSH keys requires replacing the VPS.",
-						"Changing the SSH keys requires replacing the VPS."),
 				},
 			},
 			"user": schema.StringAttribute{
@@ -175,9 +174,10 @@ func (r *vpsResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 			"enable_backups": schema.BoolAttribute{
-				Description: "Enable automatic backups for this VPS. Defaults to false.",
-				Optional:    true,
-				Computed:    true,
+				Description: "Enable automatic backups for this VPS. Defaults to false. Can be changed in place " +
+					"(disabling needs every backup deleted first).",
+				Optional: true,
+				Computed: true,
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.UseStateForUnknown(),
 				},
@@ -203,14 +203,58 @@ func (r *vpsResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 			"availability_group_uuid": schema.StringAttribute{
-				Description: "UUID of the availability group to place this VPS in. VPS in the same availability group are distributed across different physical hosts.",
-				Optional:    true,
-				Computed:    true,
+				Description: "UUID of the availability group to place this VPS in. VPS in the same availability group are " +
+					"distributed across different physical hosts. Changing it moves the VPS between groups in place; " +
+					"set it to an empty string to take the VPS out of its group.",
+				Optional: true,
+				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
-					stringplanmodifier.RequiresReplaceIf(requiresReplaceIfConfiguredString,
-						"Changing the availability group requires replacing the VPS.",
-						"Changing the availability group requires replacing the VPS."),
+				},
+			},
+			"protected": schema.BoolAttribute{
+				Description: "Destruction protection. A protected VPS cannot be destroyed or reinstalled until this is " +
+					"set to false. If omitted, the current setting is kept.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"iso_id": schema.StringAttribute{
+				Description: "ID of an ISO image to mount (see the cubepath_vps_isos data source). Set it to an empty " +
+					"string to unmount. If omitted, whatever is mounted is left alone.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"backup_schedule_hour": schema.Int64Attribute{
+				Description: "UTC hour (0-23) of the daily automatic backup. Defaults to 3.",
+				Optional:    true,
+				Computed:    true,
+				Validators:  []validator.Int64{Int64Between(0, 23)},
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
+			},
+			"backup_retention_days": schema.Int64Attribute{
+				Description: "Days automatic backups are kept (1-7). Defaults to 7.",
+				Optional:    true,
+				Computed:    true,
+				Validators:  []validator.Int64{Int64Between(1, 7)},
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
+			},
+			"backup_max_backups": schema.Int64Attribute{
+				Description: "Maximum number of automatic backups kept (1-10). Defaults to 7.",
+				Optional:    true,
+				Computed:    true,
+				Validators:  []validator.Int64{Int64Between(1, 10)},
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
 				},
 			},
 			"power_state": schema.StringAttribute{
@@ -228,10 +272,16 @@ func (r *vpsResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp
 			"main_ip": schema.StringAttribute{
 				Description: "The main public IPv4 address of the VPS.",
 				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"ipv6": schema.StringAttribute{
 				Description: "The public IPv6 address of the VPS (read-only). Empty when ipv6_enabled is false.",
 				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"private_ip": schema.StringAttribute{
 				Description: "The private IP address if attached to a network.",
@@ -326,7 +376,7 @@ func (r *vpsResource) Create(ctx context.Context, req resource.CreateRequest, re
 		createReq.Label = createReq.Name
 	}
 
-	if !plan.NetworkID.IsNull() && !plan.NetworkID.IsUnknown() {
+	if !plan.NetworkID.IsNull() && !plan.NetworkID.IsUnknown() && plan.NetworkID.ValueInt64() != 0 {
 		networkID := int(plan.NetworkID.ValueInt64())
 		createReq.NetworkID = &networkID
 	}
@@ -455,8 +505,22 @@ func (r *vpsResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
+	// Save the ID right away so a failed follow-up call does not leave an untracked VPS behind.
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), strconv.Itoa(vps.ID))...)
+
+	// Settings with their own endpoints: protection, ISO and backup schedule.
+	r.applyInPlaceChanges(createCtx, vps.ID, &plan, nil, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if vps, err = r.client.VPS.Get(createCtx, vps.ID); err != nil {
+		resp.Diagnostics.AddError("Error reading VPS after creation", err.Error())
+		return
+	}
+
 	// Update state
 	r.updateStateFromVPS(ctx, &plan, vps, false, &resp.Diagnostics)
+	r.readBackupSettings(ctx, vps.ID, &plan, false, &resp.Diagnostics)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
@@ -492,6 +556,7 @@ func (r *vpsResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 	}
 
 	r.updateStateFromVPS(ctx, &state, vps, true, &resp.Diagnostics)
+	r.readBackupSettings(ctx, vps.ID, &state, true, &resp.Diagnostics)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -633,6 +698,12 @@ func (r *vpsResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		}
 	}
 
+	// Project, protection, network, SSH keys, availability group, backups and ISO.
+	r.applyInPlaceChanges(ctx, id, &plan, &state, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// Read updated VPS
 	vps, err := r.client.VPS.Get(ctx, id)
 	if err != nil {
@@ -644,6 +715,7 @@ func (r *vpsResource) Update(ctx context.Context, req resource.UpdateRequest, re
 	}
 
 	r.updateStateFromVPS(ctx, &plan, vps, false, &resp.Diagnostics)
+	r.readBackupSettings(ctx, id, &plan, false, &resp.Diagnostics)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
@@ -747,6 +819,10 @@ func (r *vpsResource) updateStateFromVPS(ctx context.Context, state *vpsResource
 				}
 				hasIPv4 = true
 			case "IPv6":
+				// The VPS payload leaves ipv6 empty: the address is in the floating IP list.
+				if !hasIPv6 && vps.IPv6 == "" {
+					state.IPv6 = types.StringValue(ip.Address)
+				}
 				hasIPv6 = true
 			}
 		}
@@ -793,15 +869,29 @@ func (r *vpsResource) updateStateFromVPS(ctx context.Context, state *vpsResource
 		state.PrivateIP = types.StringNull()
 	}
 
-	if state.NetworkID.IsNull() || state.NetworkID.IsUnknown() {
+	state.Protected = types.BoolValue(vps.Protected)
+
+	// iso_id: "" means nothing mounted. Attaching is asynchronous, so after an apply the
+	// planned value is kept.
+	if refresh || state.ISOID.IsNull() || state.ISOID.IsUnknown() {
+		if vps.MountedISO != nil {
+			state.ISOID = types.StringValue(vps.MountedISO.ID)
+		} else {
+			state.ISOID = types.StringValue("")
+		}
+	}
+
+	if refresh || state.NetworkID.IsNull() || state.NetworkID.IsUnknown() {
 		if vps.Network != nil && vps.Network.ID != 0 {
 			state.NetworkID = types.Int64Value(int64(vps.Network.ID))
+		} else if !state.NetworkID.IsNull() && !state.NetworkID.IsUnknown() && state.NetworkID.ValueInt64() == 0 {
+			// network_id = 0 in the configuration means "no private network".
 		} else {
 			state.NetworkID = types.Int64Null()
 		}
 	}
 
-	if state.SSHKeyIDs.IsNull() || state.SSHKeyIDs.IsUnknown() {
+	if refresh || state.SSHKeyIDs.IsNull() || state.SSHKeyIDs.IsUnknown() {
 		ids := make([]int64, 0, len(vps.SSHKeys))
 		for _, key := range vps.SSHKeys {
 			ids = append(ids, int64(key.ID))
@@ -817,8 +907,14 @@ func (r *vpsResource) updateStateFromVPS(ctx context.Context, state *vpsResource
 		state.FirewallGroupIDs = int64SetOrNull(ctx, ids, state.FirewallGroupIDs, diags)
 	}
 
-	if state.AvailabilityGroupUUID.IsNull() || state.AvailabilityGroupUUID.IsUnknown() {
-		state.AvailabilityGroupUUID = r.findAvailabilityGroup(ctx, state.ProjectID, vps.ID, diags)
+	if refresh || state.AvailabilityGroupUUID.IsNull() || state.AvailabilityGroupUUID.IsUnknown() {
+		group := r.findAvailabilityGroup(ctx, state.ProjectID, vps.ID, diags)
+		// An empty string in the configuration means "no group": keep it rather than null.
+		if group.IsNull() && !state.AvailabilityGroupUUID.IsNull() && !state.AvailabilityGroupUUID.IsUnknown() &&
+			state.AvailabilityGroupUUID.ValueString() == "" {
+			group = types.StringValue("")
+		}
+		state.AvailabilityGroupUUID = group
 	}
 }
 
@@ -862,17 +958,9 @@ func int64SetOrNull(ctx context.Context, ids []int64, previous types.Set, diags 
 	return set
 }
 
-// The requiresReplaceIfConfigured* functions force replacement only when the
-// attribute is set in the configuration. Omitting an Optional+Computed
-// attribute keeps the value read from the API instead of replacing the VPS.
-func requiresReplaceIfConfiguredInt64(_ context.Context, req planmodifier.Int64Request, resp *int64planmodifier.RequiresReplaceIfFuncResponse) {
-	resp.RequiresReplace = !req.ConfigValue.IsNull()
-}
-
-func requiresReplaceIfConfiguredSet(_ context.Context, req planmodifier.SetRequest, resp *setplanmodifier.RequiresReplaceIfFuncResponse) {
-	resp.RequiresReplace = !req.ConfigValue.IsNull()
-}
-
+// requiresReplaceIfConfiguredString forces replacement only when the attribute is set in
+// the configuration. Omitting an Optional+Computed attribute keeps the value read from the
+// API instead of replacing the resource.
 func requiresReplaceIfConfiguredString(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
 	resp.RequiresReplace = !req.ConfigValue.IsNull()
 }
@@ -882,4 +970,187 @@ func requiresReplaceIfConfiguredString(_ context.Context, req planmodifier.Strin
 // in-place update.
 func requiresReplaceIfKnownInState(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
 	resp.RequiresReplace = !req.StateValue.IsNull()
+}
+
+// applyInPlaceChanges applies the attributes that have their own endpoints. prior is nil
+// on create, where network, SSH keys and availability group were already part of the
+// create request.
+func (r *vpsResource) applyInPlaceChanges(ctx context.Context, id int, plan, prior *vpsResourceModel, diags *diag.Diagnostics) {
+	if prior != nil && !plan.ProjectID.Equal(prior.ProjectID) {
+		if err := r.client.VPS.MoveProject(ctx, id, int(plan.ProjectID.ValueInt64())); err != nil {
+			diags.AddError("Error moving VPS", err.Error())
+			return
+		}
+	}
+
+	if want := knownBool(plan.Protected); want != nil {
+		changed := *want // on create only enabling needs a call
+		if prior != nil {
+			changed = !plan.Protected.Equal(prior.Protected)
+		}
+		if changed {
+			if err := r.client.VPS.SetProtection(ctx, id, *want); err != nil {
+				diags.AddError("Error changing VPS protection", err.Error())
+				return
+			}
+		}
+	}
+
+	if prior != nil {
+		r.applyNetwork(ctx, id, plan, prior, diags)
+		if diags.HasError() {
+			return
+		}
+
+		if !plan.SSHKeyIDs.IsUnknown() && !plan.SSHKeyIDs.Equal(prior.SSHKeyIDs) {
+			add, remove := diffInts(intsFromSet(ctx, prior.SSHKeyIDs, diags), intsFromSet(ctx, plan.SSHKeyIDs, diags))
+			for _, key := range remove {
+				if err := r.client.VPS.RemoveSSHKey(ctx, id, int(key)); err != nil {
+					diags.AddError("Error removing SSH key from VPS", err.Error())
+					return
+				}
+			}
+			if len(add) > 0 {
+				keys := make([]int, 0, len(add))
+				for _, key := range add {
+					keys = append(keys, int(key))
+				}
+				if err := r.client.VPS.AddSSHKeys(ctx, id, keys); err != nil {
+					diags.AddError("Error adding SSH keys to VPS", err.Error())
+					return
+				}
+			}
+		}
+
+		if !plan.AvailabilityGroupUUID.IsUnknown() && !plan.AvailabilityGroupUUID.Equal(prior.AvailabilityGroupUUID) {
+			if old := prior.AvailabilityGroupUUID.ValueString(); old != "" {
+				if err := r.client.AvailabilityGroups.RemoveVPS(ctx, old, id); err != nil && !isNotFound(err) {
+					diags.AddError("Error removing VPS from availability group", err.Error())
+					return
+				}
+			}
+			if group := plan.AvailabilityGroupUUID.ValueString(); group != "" {
+				if err := r.client.AvailabilityGroups.AddVPS(ctx, group, id); err != nil {
+					diags.AddError("Error adding VPS to availability group", err.Error())
+					return
+				}
+			}
+		}
+	}
+
+	r.applyBackupSettings(ctx, id, plan, prior, diags)
+	if diags.HasError() {
+		return
+	}
+
+	if want := knownString(plan.ISOID); want != nil {
+		have := ""
+		if prior != nil {
+			have = prior.ISOID.ValueString()
+		}
+		if *want != have {
+			if have != "" {
+				if err := r.client.VPS.DetachISO(ctx, id); err != nil {
+					diags.AddError("Error unmounting ISO", err.Error())
+					return
+				}
+			}
+			if *want != "" {
+				// A detach queued just before answers 409 until it is done.
+				err := retryWhile(ctx, 5*time.Minute, 10*time.Second, isConflict, func() error {
+					return r.client.VPS.AttachISO(ctx, id, *want)
+				})
+				if err != nil {
+					diags.AddError("Error mounting ISO", err.Error())
+				}
+			}
+		}
+	}
+}
+
+// applyNetwork moves the VPS to the planned private network: detach the old one, then
+// attach the new one once the detach task is done.
+func (r *vpsResource) applyNetwork(ctx context.Context, id int, plan, prior *vpsResourceModel, diags *diag.Diagnostics) {
+	if plan.NetworkID.IsUnknown() || plan.NetworkID.Equal(prior.NetworkID) {
+		return
+	}
+	if !prior.NetworkID.IsNull() && prior.NetworkID.ValueInt64() != 0 {
+		if err := r.client.VPS.DetachNetwork(ctx, id); err != nil {
+			diags.AddError("Error detaching private network", err.Error())
+			return
+		}
+	}
+	if plan.NetworkID.IsNull() || plan.NetworkID.ValueInt64() == 0 {
+		return
+	}
+	networkID := int(plan.NetworkID.ValueInt64())
+	err := retryWhile(ctx, 5*time.Minute, 10*time.Second, isConflict, func() error {
+		return r.client.VPS.AttachNetwork(ctx, id, networkID)
+	})
+	if err != nil {
+		diags.AddError("Error attaching private network", err.Error())
+	}
+}
+
+// applyBackupSettings updates the automatic backup settings when one of them changed.
+// The API replaces all four values at once, so unset ones keep their current value.
+func (r *vpsResource) applyBackupSettings(ctx context.Context, id int, plan, prior *vpsResourceModel, diags *diag.Diagnostics) {
+	changed := func(p, s types.Int64) bool {
+		if p.IsUnknown() || p.IsNull() {
+			return false
+		}
+		return prior == nil || !p.Equal(s)
+	}
+	var priorHour, priorRetention, priorMax types.Int64
+	enabledChanged := false
+	if prior != nil {
+		priorHour, priorRetention, priorMax = prior.BackupScheduleHour, prior.BackupRetentionDays, prior.BackupMaxBackups
+		enabledChanged = !plan.EnableBackups.IsUnknown() && !plan.EnableBackups.IsNull() && !plan.EnableBackups.Equal(prior.EnableBackups)
+	}
+	if !enabledChanged && !changed(plan.BackupScheduleHour, priorHour) &&
+		!changed(plan.BackupRetentionDays, priorRetention) && !changed(plan.BackupMaxBackups, priorMax) {
+		return
+	}
+
+	settings, err := r.client.VPS.GetBackupSettings(ctx, id)
+	if err != nil {
+		diags.AddError("Error reading VPS backup settings", err.Error())
+		return
+	}
+	if v := knownBool(plan.EnableBackups); v != nil {
+		settings.Enabled = *v
+	}
+	if v := knownInt(plan.BackupScheduleHour); v != nil {
+		settings.ScheduleHour = *v
+	}
+	if v := knownInt(plan.BackupRetentionDays); v != nil {
+		settings.RetentionDays = *v
+	}
+	if v := knownInt(plan.BackupMaxBackups); v != nil {
+		settings.MaxBackups = *v
+	}
+	if _, err := r.client.VPS.UpdateBackupSettings(ctx, id, settings); err != nil {
+		diags.AddError("Error updating VPS backup settings", err.Error())
+	}
+}
+
+// readBackupSettings fills the backup schedule attributes. On refresh enable_backups is
+// taken from the settings too, so changes made in the dashboard show up as drift.
+func (r *vpsResource) readBackupSettings(ctx context.Context, id int, state *vpsResourceModel, refresh bool, diags *diag.Diagnostics) {
+	settings, err := r.client.VPS.GetBackupSettings(ctx, id)
+	if err != nil {
+		diags.AddWarning("Could not read VPS backup settings", err.Error())
+		for _, v := range []*types.Int64{&state.BackupScheduleHour, &state.BackupRetentionDays, &state.BackupMaxBackups} {
+			if v.IsUnknown() {
+				*v = types.Int64Null()
+			}
+		}
+		return
+	}
+	state.BackupScheduleHour = types.Int64Value(int64(settings.ScheduleHour))
+	state.BackupRetentionDays = types.Int64Value(int64(settings.RetentionDays))
+	state.BackupMaxBackups = types.Int64Value(int64(settings.MaxBackups))
+	if refresh {
+		state.EnableBackups = types.BoolValue(settings.Enabled)
+	}
 }

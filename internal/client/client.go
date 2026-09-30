@@ -45,6 +45,10 @@ type Client struct {
 	NATGateway         *NATGatewayService
 	NetworkRoutes      *NetworkRouteService
 	ObjectStorage      *ObjectStorageService
+	ManagedDatabases   *ManagedDatabaseService
+	Alerts             *AlertsService
+	DDoS               *DDoSService
+	Transcoder         *TranscoderService
 }
 
 // ClientOption is a function that configures a Client
@@ -131,6 +135,10 @@ func NewClient(apiToken, baseURL string, opts ...ClientOption) (*Client, error) 
 	client.NATGateway = NewNATGatewayService(client)
 	client.NetworkRoutes = NewNetworkRouteService(client)
 	client.ObjectStorage = NewObjectStorageService(client)
+	client.ManagedDatabases = NewManagedDatabaseService(client)
+	client.Alerts = NewAlertsService(client)
+	client.DDoS = NewDDoSService(client)
+	client.Transcoder = NewTranscoderService(client)
 
 	return client, nil
 }

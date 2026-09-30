@@ -179,6 +179,17 @@ func (p *cubePathProvider) DataSources(_ context.Context) []func() datasource.Da
 		NewObjectStorageTiersDataSource,
 		NewObjectStorageBucketDataSource,
 		NewObjectStorageUsageDataSource,
+		NewManagedDatabasePlansDataSource,
+		NewManagedDatabaseCredentialsDataSource,
+		NewDDoSProtectedIPsDataSource,
+		NewDDoSCountriesDataSource,
+		NewDDoSASNsDataSource,
+		NewTranscoderJobDataSource,
+		NewTranscoderJobsDataSource,
+		NewNATGatewaysDataSource,
+		NewKubernetesLoadBalancersDataSource,
+		NewVPSISOsDataSource,
+		NewBaremetalModelsDataSource,
 	}
 }
 
@@ -208,5 +219,17 @@ func (p *cubePathProvider) Resources(_ context.Context) []func() resource.Resour
 		NewNetworkRouteResource,
 		NewObjectStorageBucketResource,
 		NewObjectStorageAccessKeyResource,
+		NewManagedDatabaseResource,
+		NewManagedDatabaseDatabaseResource,
+		NewManagedDatabaseUserResource,
+		NewAlertChannelResource,
+		NewAlertRuleResource,
+		NewDDoSProtectionProfileResource,
+		NewDDoSFirewallRuleResource,
+		NewDDoSPrefixListResource,
+		NewNetworkBGPPeerResource,
+		NewLBTargetResource,
+		NewLBHealthCheckResource,
+		NewDNSRecordHealthCheckResource,
 	}
 }

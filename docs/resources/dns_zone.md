@@ -21,7 +21,12 @@ Manages a DNS zone on CubePath Cloud.
 
 ### Optional
 
-- `project_id` (Number) The project ID. Uses default project if not specified.
+- `project_id` (Number) The project ID. Uses default project if not specified. Changing it moves the zone in place.
+- `soa_expire` (Number) SOA expire, in seconds (86400-2419200). Defaults to 604800.
+- `soa_hostmaster` (String) SOA hostmaster email. Defaults to hostmaster@<domain>. Once set it cannot go back to the default.
+- `soa_minimum` (Number) SOA minimum (negative caching) TTL, in seconds (60-86400). Defaults to 300.
+- `soa_refresh` (Number) SOA refresh, in seconds (300-86400). Defaults to 3600.
+- `soa_retry` (Number) SOA retry, in seconds (60-86400). Defaults to 900.
 
 ### Read-Only
 

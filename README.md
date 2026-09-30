@@ -33,7 +33,7 @@ terraform {
   required_providers {
     cubepath = {
       source  = "cubepathinc/cubepath"
-      version = "~> 0.6"
+      version = "~> 0.8"
     }
   }
 }
@@ -104,6 +104,18 @@ resource "cubepath_vps" "web" {
 - `cubepath_availability_group` - Manage availability groups for high availability
 - `cubepath_object_storage_bucket` - Manage S3 compatible Object Storage buckets
 - `cubepath_object_storage_access_key` - Manage Object Storage access keys for S3 clients
+- `cubepath_managed_database` - Manage Managed Databases (MySQL, PostgreSQL, Valkey): plan, replicas, backups, configuration
+- `cubepath_managed_database_database` - Manage databases inside a Managed Database
+- `cubepath_managed_database_user` - Manage users of a Managed Database
+- `cubepath_alert_channel` - Manage Cloud Alerts notification channels (email, Slack, Discord)
+- `cubepath_alert_rule` - Manage Cloud Alerts rules on VPS, baremetal servers and availability groups
+- `cubepath_ddos_protection_profile` - Manage the DDoS protection profile of an IP with Premium protection
+- `cubepath_ddos_firewall_rule` - Manage DDoS mitigation firewall rules on your IPs
+- `cubepath_ddos_prefix_list` - Manage DDoS prefix lists
+- `cubepath_network_bgp_peer` - Manage BGP peers (Dynamic Routes) of a private network
+- `cubepath_lb_target` - Manage load balancer targets (VPS, baremetal, availability groups)
+- `cubepath_lb_health_check` - Manage load balancer listener health checks
+- `cubepath_dns_record_health_check` - Manage DNS record health checks (failover)
 
 ### Data Sources
 - `cubepath_locations` - List available locations
@@ -122,6 +134,16 @@ resource "cubepath_vps" "web" {
 - `cubepath_object_storage_tiers` - List Object Storage tiers with endpoint, prices and free tier
 - `cubepath_object_storage_bucket` - Look up an Object Storage bucket by name or UUID
 - `cubepath_object_storage_usage` - Object Storage usage and cost of a month
+- `cubepath_managed_database_plans` - List Managed Database plans per location
+- `cubepath_managed_database_credentials` - Admin connection credentials of a Managed Database
+- `cubepath_ddos_protected_ips` - List IPs with Premium DDoS protection
+- `cubepath_ddos_countries` - Countries available for DDoS geo-blocking
+- `cubepath_ddos_asns` - Search ASNs available for DDoS filtering
+- `cubepath_transcoder_job` / `cubepath_transcoder_jobs` - Read Video Transcoder jobs
+- `cubepath_nat_gateways` - List NAT gateways
+- `cubepath_kubernetes_loadbalancers` - Load balancers targeting a Kubernetes cluster
+- `cubepath_vps_isos` - ISO images that can be mounted on a VPS
+- `cubepath_baremetal_models` - Baremetal server models on sale, with price and stock
 
 ## Examples
 
