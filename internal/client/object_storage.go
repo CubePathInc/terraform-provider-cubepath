@@ -123,3 +123,30 @@ func (s *ObjectStorageService) GetUsage(ctx context.Context, period string, proj
 	}
 	return &result, nil
 }
+
+func lifecyclePath(uuid string) string {
+	return "/object-storage/buckets/" + url.PathEscape(uuid) + "/lifecycle"
+}
+
+// GetBucketLifecycle retrieves the lifecycle rules of a bucket and whether they are applied
+func (s *ObjectStorageService) GetBucketLifecycle(ctx context.Context, uuid string) (*ObjectStorageLifecycle, error) {
+	var result ObjectStorageLifecycle
+	if err := s.client.Get(ctx, lifecyclePath(uuid), &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// PutBucketLifecycle replaces every lifecycle rule of a bucket; it is applied asynchronously
+func (s *ObjectStorageService) PutBucketLifecycle(ctx context.Context, uuid string, rules []ObjectStorageLifecycleRule) (*ObjectStorageLifecycleChange, error) {
+	var result ObjectStorageLifecycleChange
+	if err := s.client.Put(ctx, lifecyclePath(uuid), map[string]interface{}{"rules": rules}, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteBucketLifecycle removes every lifecycle rule of a bucket
+func (s *ObjectStorageService) DeleteBucketLifecycle(ctx context.Context, uuid string) error {
+	return s.client.Delete(ctx, lifecyclePath(uuid))
+}
