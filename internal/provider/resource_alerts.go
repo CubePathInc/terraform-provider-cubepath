@@ -240,6 +240,7 @@ type alertRuleModel struct {
 	Description     types.String  `tfsdk:"description"`
 	TargetType      types.String  `tfsdk:"target_type"`
 	TargetID        types.String  `tfsdk:"target_id"`
+	TargetName      types.String  `tfsdk:"target_name"`
 	MetricType      types.String  `tfsdk:"metric_type"`
 	Operator        types.String  `tfsdk:"operator"`
 	Threshold       types.Float64 `tfsdk:"threshold"`
@@ -257,7 +258,8 @@ func (r *alertRuleResource) Metadata(_ context.Context, req resource.MetadataReq
 func (r *alertRuleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Manages a Cloud Alerts rule: notifies the given channels when a metric of a VPS, baremetal " +
-			"server or availability group crosses a threshold for a sustained time. Import with the rule ID.",
+			"server or availability group crosses a threshold for a sustained time, or when the usage of an Object " +
+			"Storage bucket or of the organization's Object Storage crosses a threshold. Import with the rule ID.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description:   "The ID of the rule.",
@@ -278,42 +280,62 @@ func (r *alertRuleResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Optional:    true,
 			},
 			"target_type": schema.StringAttribute{
-				Description: "What the rule watches: vps, baremetal or availability_group.",
-				Required:    true,
-				Validators:  []validator.String{StringOneOf("vps", "baremetal", "availability_group")},
+				Description: "What the rule watches: vps, baremetal, availability_group, object_storage_bucket or " +
+					"organization (the Object Storage usage of the whole organization).",
+				Required: true,
+				Validators: []validator.String{StringOneOf(
+					"vps", "baremetal", "availability_group", "object_storage_bucket", "organization")},
 			},
 			"target_id": schema.StringAttribute{
-				Description: "ID of the VPS or baremetal server, or UUID of the availability group.",
-				Required:    true,
+				Description: "ID of the VPS or baremetal server, UUID of the availability group or of the bucket, or " +
+					"the organization ID for organization rules. A bucket rule must be created in the bucket's project.",
+				Required: true,
+			},
+			"target_name": schema.StringAttribute{
+				Description: "Name of the watched bucket, null for other targets.",
+				Computed:    true,
 			},
 			"metric_type": schema.StringAttribute{
-				Description: "Metric: cpu, ram, disk, network_in or network_out. Baremetal servers only support " +
-					"network_in and network_out.",
-				Required:   true,
-				Validators: []validator.String{StringOneOf("cpu", "ram", "disk", "network_in", "network_out")},
+				Description: "Metric: cpu, ram, disk, network_in or network_out for servers (baremetal servers only " +
+					"support network_in and network_out); storage_size_gb (GiB), storage_egress_gb_month (GiB this " +
+					"month, before the free tier), storage_error_rate_5xx or storage_error_rate_403 (percent of " +
+					"requests over the last 5 minutes, needs at least 20 requests) for buckets; storage_cost_month " +
+					"(USD billed so far this month, about an hour behind billing) or storage_egress_gb_month for " +
+					"organization rules.",
+				Required: true,
+				Validators: []validator.String{StringOneOf(
+					"cpu", "ram", "disk", "network_in", "network_out",
+					"storage_size_gb", "storage_egress_gb_month", "storage_error_rate_5xx", "storage_error_rate_403",
+					"storage_cost_month")},
 			},
 			"operator": schema.StringAttribute{
-				Description: "Comparison: gt, gte, lt, lte or eq.",
-				Required:    true,
-				Validators:  []validator.String{StringOneOf("gt", "gte", "lt", "lte", "eq")},
+				Description: "Comparison: gt, gte, lt, lte or eq. Monthly metrics (storage_cost_month and " +
+					"storage_egress_gb_month) only accept gt and gte.",
+				Required:   true,
+				Validators: []validator.String{StringOneOf("gt", "gte", "lt", "lte", "eq")},
 			},
 			"threshold": schema.Float64Attribute{
-				Description: "Threshold, 0 to 1000000 (percent for cpu, ram and disk).",
-				Required:    true,
+				Description: "Threshold, 0 to 1000000 for server metrics (percent for cpu, ram and disk). Object " +
+					"Storage metrics need a value above 0 and at most 1048576 for storage_size_gb, 100 for the error " +
+					"rates and 1000000 for storage_egress_gb_month and storage_cost_month.",
+				Required: true,
 			},
 			"duration_seconds": schema.Int64Attribute{
-				Description: "How long the condition must hold before the rule fires, 60 to 3600. Defaults to 300.",
-				Optional:    true,
-				Computed:    true,
-				Default:     int64default.StaticInt64(300),
-				Validators:  []validator.Int64{Int64Between(60, 3600)},
+				Description: "How long the condition must hold before the rule fires, 60 to 3600. Defaults to 300. " +
+					"Ignored by monthly metrics, which fire once per month as soon as the threshold is crossed and " +
+					"reset on the 1st (UTC): leave it unset for them.",
+				Optional:   true,
+				Computed:   true,
+				Default:    int64default.StaticInt64(300),
+				Validators: []validator.Int64{Int64Between(60, 3600)},
 			},
 			"cooldown_seconds": schema.Int64Attribute{
-				Description: "Minimum time between two notifications, 60 to 86400. Defaults to 600.",
-				Optional:    true,
-				Computed:    true,
-				Default:     int64default.StaticInt64(600),
-				Validators:  []validator.Int64{Int64Between(60, 86400)},
+				Description: "Minimum time between two notifications, 60 to 86400. Defaults to 600. Ignored by " +
+					"monthly metrics.",
+				Optional:   true,
+				Computed:   true,
+				Default:    int64default.StaticInt64(600),
+				Validators: []validator.Int64{Int64Between(60, 86400)},
 			},
 			"channel_ids": schema.SetAttribute{
 				Description: "IDs of the channels to notify (cubepath_alert_channel), 1 to 10.",
@@ -496,6 +518,7 @@ func fillAlertRule(state *alertRuleModel, rule *client.AlertRule) {
 	state.Description = stringOrNull(rule.Description)
 	state.TargetType = types.StringValue(rule.TargetType)
 	state.TargetID = types.StringValue(rule.TargetID)
+	state.TargetName = stringOrNull(rule.TargetName)
 	state.MetricType = types.StringValue(rule.MetricType)
 	state.Operator = types.StringValue(rule.Operator)
 	state.Threshold = types.Float64Value(rule.Threshold)
