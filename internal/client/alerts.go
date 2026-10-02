@@ -40,7 +40,7 @@ type AlertRuleAction struct {
 	Enabled       bool   `json:"enabled"`
 }
 
-// AlertRule is a Cloud Alert: a metric threshold on a server or availability group
+// AlertRule is a Cloud Alert: a metric threshold on a server, availability group, bucket or organization
 type AlertRule struct {
 	ID              string            `json:"id"`
 	ProjectID       int               `json:"project_id"`
@@ -48,6 +48,7 @@ type AlertRule struct {
 	Description     *string           `json:"description"`
 	TargetType      string            `json:"target_type"`
 	TargetID        string            `json:"target_id"`
+	TargetName      *string           `json:"target_name"`
 	MetricType      string            `json:"metric_type"`
 	Operator        string            `json:"operator"`
 	Threshold       float64           `json:"threshold"`

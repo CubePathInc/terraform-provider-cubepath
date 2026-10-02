@@ -15,6 +15,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
@@ -273,6 +275,60 @@ func TestAlertRuleMapping(t *testing.T) {
 	sort.Strings(channels)
 	if !reflect.DeepEqual(channels, []string{"n1", "n2"}) {
 		t.Errorf("channels %v", channels)
+	}
+}
+
+func TestAlertRuleMappingObjectStorage(t *testing.T) {
+	ctx := context.Background()
+	var state alertRuleModel
+	var diags diag.Diagnostics
+	bucket := "assets"
+	mapAlertRule(ctx, &state, &client.AlertRule{
+		ID: "r2", ProjectID: 1, Name: "assets size", TargetType: "object_storage_bucket",
+		TargetID: "6f1c1a8e-0d6b-4f0e-9a43-2b7f3c1d9e10", TargetName: &bucket, MetricType: "storage_size_gb",
+		Operator: "gte", Threshold: 1048576, DurationSeconds: 300, CooldownSeconds: 600, Status: "enabled",
+		Actions: []client.AlertRuleAction{{ActionType: "notify", NotificatorID: "n1"}},
+	}, &diags)
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	if state.TargetName.ValueString() != "assets" || state.Threshold.ValueFloat64() != 1048576 {
+		t.Errorf("got %+v", state)
+	}
+
+	mapAlertRule(ctx, &state, &client.AlertRule{
+		ID: "r3", ProjectID: 1, Name: "budget", TargetType: "organization", TargetID: "42",
+		MetricType: "storage_cost_month", Operator: "gte", Threshold: 50, DurationSeconds: 300,
+		CooldownSeconds: 600, Status: "triggered",
+	}, &diags)
+	if !state.TargetName.IsNull() || state.TargetID.ValueString() != "42" {
+		t.Errorf("organization rule: got %+v", state)
+	}
+}
+
+func TestAlertRuleSchemaAcceptsObjectStorage(t *testing.T) {
+	ctx := context.Background()
+	var resp resource.SchemaResponse
+	(&alertRuleResource{}).Schema(ctx, resource.SchemaRequest{}, &resp)
+	cases := map[string][]string{
+		"target_type": {"object_storage_bucket", "organization"},
+		"metric_type": {"storage_size_gb", "storage_egress_gb_month", "storage_error_rate_5xx",
+			"storage_error_rate_403", "storage_cost_month"},
+	}
+	for attr, values := range cases {
+		a := resp.Schema.Attributes[attr].(schema.StringAttribute)
+		for _, v := range values {
+			vresp := &validator.StringResponse{}
+			for _, val := range a.Validators {
+				val.ValidateString(ctx, validator.StringRequest{ConfigValue: types.StringValue(v)}, vresp)
+			}
+			if vresp.Diagnostics.HasError() {
+				t.Errorf("%s rejects %q: %v", attr, v, vresp.Diagnostics)
+			}
+		}
+	}
+	if _, ok := resp.Schema.Attributes["target_name"]; !ok {
+		t.Error("target_name is missing")
 	}
 }
 

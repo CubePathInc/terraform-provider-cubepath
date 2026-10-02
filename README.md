@@ -108,7 +108,7 @@ resource "cubepath_vps" "web" {
 - `cubepath_managed_database_database` - Manage databases inside a Managed Database
 - `cubepath_managed_database_user` - Manage users of a Managed Database
 - `cubepath_alert_channel` - Manage Cloud Alerts notification channels (email, Slack, Discord)
-- `cubepath_alert_rule` - Manage Cloud Alerts rules on VPS, baremetal servers and availability groups
+- `cubepath_alert_rule` - Manage Cloud Alerts rules on VPS, baremetal servers, availability groups, Object Storage buckets and the organization's Object Storage usage
 - `cubepath_ddos_protection_profile` - Manage the DDoS protection profile of an IP with Premium protection
 - `cubepath_ddos_firewall_rule` - Manage DDoS mitigation firewall rules on your IPs
 - `cubepath_ddos_prefix_list` - Manage DDoS prefix lists
