@@ -22,6 +22,30 @@ resource "cubepath_object_storage_bucket" "assets" {
   protected  = true # set to false before destroying it
 }
 
+# Lifecycle rules of the bucket (every rule of the bucket is managed by this one resource).
+# Deletions are permanent; objects go within 48 hours of their due date.
+resource "cubepath_object_storage_bucket_lifecycle" "assets" {
+  bucket_uuid = cubepath_object_storage_bucket.assets.id
+
+  rule {
+    id              = "tmp-7d"
+    prefix          = "tmp/"
+    expiration_days = 7
+  }
+
+  # The bucket is versioned: an expiration only adds a delete marker, this frees the space
+  rule {
+    id                        = "old-versions"
+    noncurrent_days           = 30
+    newer_noncurrent_versions = 3
+  }
+
+  rule {
+    id                                     = "failed-uploads"
+    abort_incomplete_multipart_upload_days = 2
+  }
+}
+
 # A read only key limited to that bucket, for an application or a backup job
 resource "cubepath_object_storage_access_key" "app" {
   name       = "app-read-only"

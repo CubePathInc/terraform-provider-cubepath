@@ -219,6 +219,7 @@ func (p *cubePathProvider) Resources(_ context.Context) []func() resource.Resour
 		NewNetworkRouteResource,
 		NewObjectStorageBucketResource,
 		NewObjectStorageAccessKeyResource,
+		NewObjectStorageBucketLifecycleResource,
 		NewManagedDatabaseResource,
 		NewManagedDatabaseDatabaseResource,
 		NewManagedDatabaseUserResource,

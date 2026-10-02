@@ -133,3 +133,42 @@ func TestGetUsageQuery(t *testing.T) {
 		t.Fatalf("query %q", q)
 	}
 }
+
+func TestBucketLifecycleRoutes(t *testing.T) {
+	c, reqs := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_, _ = w.Write([]byte(`{"bucket_uuid":"b1","status":"active","generation":2,"applied_generation":2,"rules":[{"id":"r","enabled":true,"expiration":{"days":30}}]}`))
+		case http.MethodPut:
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"detail":"Lifecycle rules are being applied","generation":3}`))
+		default:
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"detail":"Lifecycle rules are being removed","generation":4}`))
+		}
+	})
+	ctx := context.Background()
+	lc, err := c.ObjectStorage.GetBucketLifecycle(ctx, "b1")
+	if err != nil || lc.Rules[0].ID != "r" || *lc.Rules[0].Expiration.Days != 30 {
+		t.Fatalf("got %+v, %v", lc, err)
+	}
+	days := int64(7)
+	change, err := c.ObjectStorage.PutBucketLifecycle(ctx, "b1", []ObjectStorageLifecycleRule{{ID: "r", Enabled: true, Expiration: &ObjectStorageLifecycleExpiration{Days: &days}}})
+	if err != nil || *change.Generation != 3 {
+		t.Fatalf("got %+v, %v", change, err)
+	}
+	if err := c.ObjectStorage.DeleteBucketLifecycle(ctx, "b1"); err != nil {
+		t.Fatal(err)
+	}
+	put := (*reqs)[1]
+	if put.Method != http.MethodPut || put.Path != "/object-storage/buckets/b1/lifecycle" {
+		t.Fatalf("got %+v", put)
+	}
+	rule := put.Body["rules"].([]interface{})[0].(map[string]interface{})
+	if _, ok := rule["filter"]; ok {
+		t.Fatalf("an empty filter must be omitted: %v", rule)
+	}
+	if (*reqs)[2].Method != http.MethodDelete || (*reqs)[2].Path != "/object-storage/buckets/b1/lifecycle" {
+		t.Fatalf("got %+v", (*reqs)[2])
+	}
+}

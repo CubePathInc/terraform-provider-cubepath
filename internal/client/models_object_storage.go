@@ -173,3 +173,64 @@ type ObjectStorageUsage struct {
 	Tiers            []ObjectStorageUsageTier   `json:"tiers"`
 	Buckets          []ObjectStorageUsageBucket `json:"buckets"`
 }
+
+// ObjectStorageLifecycleTag is one tag of a lifecycle rule filter
+type ObjectStorageLifecycleTag struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// ObjectStorageLifecycleFilter limits a rule to part of the bucket (nil = the whole bucket)
+type ObjectStorageLifecycleFilter struct {
+	Prefix                *string                     `json:"prefix,omitempty"`
+	Tags                  []ObjectStorageLifecycleTag `json:"tags,omitempty"`
+	ObjectSizeGreaterThan *int64                      `json:"object_size_greater_than,omitempty"`
+	ObjectSizeLessThan    *int64                      `json:"object_size_less_than,omitempty"`
+}
+
+// ObjectStorageLifecycleExpiration deletes current objects after Days, on Date, or removes
+// orphan delete markers
+type ObjectStorageLifecycleExpiration struct {
+	Days                      *int64  `json:"days,omitempty"`
+	Date                      *string `json:"date,omitempty"`
+	ExpiredObjectDeleteMarker *bool   `json:"expired_object_delete_marker,omitempty"`
+}
+
+// ObjectStorageLifecycleNoncurrentExpiration deletes noncurrent versions
+type ObjectStorageLifecycleNoncurrentExpiration struct {
+	NoncurrentDays          int64  `json:"noncurrent_days"`
+	NewerNoncurrentVersions *int64 `json:"newer_noncurrent_versions,omitempty"`
+}
+
+// ObjectStorageLifecycleAbortUpload aborts incomplete multipart uploads
+type ObjectStorageLifecycleAbortUpload struct {
+	DaysAfterInitiation int64 `json:"days_after_initiation"`
+}
+
+// ObjectStorageLifecycleRule is one lifecycle rule of a bucket
+type ObjectStorageLifecycleRule struct {
+	ID                             string                                      `json:"id"`
+	Enabled                        bool                                        `json:"enabled"`
+	Filter                         *ObjectStorageLifecycleFilter               `json:"filter,omitempty"`
+	Expiration                     *ObjectStorageLifecycleExpiration           `json:"expiration,omitempty"`
+	NoncurrentVersionExpiration    *ObjectStorageLifecycleNoncurrentExpiration `json:"noncurrent_version_expiration,omitempty"`
+	AbortIncompleteMultipartUpload *ObjectStorageLifecycleAbortUpload          `json:"abort_incomplete_multipart_upload,omitempty"`
+}
+
+// ObjectStorageLifecycle is the answer of GET /object-storage/buckets/{uuid}/lifecycle
+type ObjectStorageLifecycle struct {
+	BucketUUID        string                       `json:"bucket_uuid"`
+	Status            string                       `json:"status"`
+	Rules             []ObjectStorageLifecycleRule `json:"rules"`
+	Generation        int64                        `json:"generation"`
+	AppliedGeneration int64                        `json:"applied_generation"`
+	Error             *string                      `json:"error"`
+	Notes             []string                     `json:"notes"`
+}
+
+// ObjectStorageLifecycleChange is the answer of PUT and DELETE of the lifecycle; Generation is
+// nil when nothing changed
+type ObjectStorageLifecycleChange struct {
+	Detail     string `json:"detail"`
+	Generation *int64 `json:"generation"`
+}
