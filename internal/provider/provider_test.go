@@ -29,6 +29,7 @@ func TestProviderSchemasAreValid(t *testing.T) {
 		"cubepath_alert_channel", "cubepath_alert_rule",
 		"cubepath_ddos_protection_profile", "cubepath_ddos_firewall_rule", "cubepath_ddos_prefix_list",
 		"cubepath_network_bgp_peer", "cubepath_lb_target", "cubepath_lb_health_check", "cubepath_dns_record_health_check",
+		"cubepath_object_storage_replication", "cubepath_object_storage_replication_grant",
 	} {
 		if _, ok := resp.ResourceSchemas[name]; !ok {
 			t.Errorf("resource %s is not registered", name)
@@ -39,6 +40,7 @@ func TestProviderSchemasAreValid(t *testing.T) {
 		"cubepath_ddos_protected_ips", "cubepath_ddos_countries", "cubepath_ddos_asns",
 		"cubepath_transcoder_job", "cubepath_transcoder_jobs",
 		"cubepath_nat_gateways", "cubepath_kubernetes_loadbalancers", "cubepath_vps_isos", "cubepath_baremetal_models",
+		"cubepath_object_storage_replications",
 	} {
 		if _, ok := resp.DataSourceSchemas[name]; !ok {
 			t.Errorf("data source %s is not registered", name)

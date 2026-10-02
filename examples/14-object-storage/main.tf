@@ -88,6 +88,33 @@ resource "cubepath_object_storage_access_key" "backups" {
   bypass_governance = true
 }
 
+# Off site copy: replicate the bucket (versioning enabled) to an external S3 compatible
+# bucket over HTTPS. Billed as egress of the source bucket. A CubePath destination
+# (type = "cubepath", bucket_uuid) is on the same storage cluster, so it is not a
+# disaster recovery copy. Buckets with Object Lock cannot be sources.
+variable "offsite_access_key_id" {
+  type = string
+}
+
+variable "offsite_secret_access_key" {
+  type      = string
+  sensitive = true # kept in the state, marked sensitive
+}
+
+resource "cubepath_object_storage_replication" "assets_offsite" {
+  source_bucket_uuid = cubepath_object_storage_bucket.assets.id
+
+  destination {
+    type              = "external"
+    provider          = "wasabi"
+    endpoint          = "s3.eu-central-1.wasabisys.com"
+    region            = "eu-central-1"
+    bucket            = "my-company-assets-offsite"
+    access_key_id     = var.offsite_access_key_id
+    secret_access_key = var.offsite_secret_access_key
+  }
+}
+
 # Buckets are never public: serve one through the CDN by adding it as an origin
 resource "cubepath_cdn_zone" "assets" {
   name      = "my-company-assets"

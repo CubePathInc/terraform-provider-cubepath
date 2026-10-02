@@ -280,3 +280,125 @@ type ObjectStorageLifecycleChange struct {
 	Detail     string `json:"detail"`
 	Generation *int64 `json:"generation"`
 }
+
+// ObjectStorageReplicationSource is the source bucket of a replication. For an incoming replication
+// of another organization only the names are returned.
+type ObjectStorageReplicationSource struct {
+	BucketUUID       *string `json:"bucket_uuid"`
+	BucketName       *string `json:"bucket_name"`
+	ProjectID        *int    `json:"project_id"`
+	OrganizationName *string `json:"organization_name"`
+	SameOrganization bool    `json:"same_organization"`
+}
+
+// ObjectStorageReplicationDestination is the destination of a replication: a CubePath bucket
+// (Type "cubepath") or an external S3 compatible bucket (Type "external"). The access key id of an
+// external destination is masked and its secret is never returned.
+type ObjectStorageReplicationDestination struct {
+	Type string `json:"type"`
+	// cubepath
+	BucketUUID       *string `json:"bucket_uuid"`
+	BucketName       *string `json:"bucket_name"`
+	ProjectID        *int    `json:"project_id"`
+	OrganizationName *string `json:"organization_name"`
+	SameOrganization bool    `json:"same_organization"`
+	// external
+	Provider    *string `json:"provider"`
+	Endpoint    *string `json:"endpoint"`
+	Region      *string `json:"region"`
+	Bucket      *string `json:"bucket"`
+	PathStyle   *string `json:"path_style"`
+	AccessKeyID *string `json:"access_key_id"`
+}
+
+// ObjectStorageReplicationRules are the rules of a replication
+type ObjectStorageReplicationRules struct {
+	Enabled                 bool                        `json:"enabled"`
+	Prefix                  *string                     `json:"prefix"`
+	Tags                    []ObjectStorageLifecycleTag `json:"tags"`
+	DeleteMarkerReplication bool                        `json:"delete_marker_replication"`
+	DeleteReplication       bool                        `json:"delete_replication"`
+	ExistingObjects         bool                        `json:"existing_objects"`
+}
+
+// ObjectStorageReplicationBackfill is the copy of the objects the source already held
+type ObjectStorageReplicationBackfill struct {
+	Status        string  `json:"status"`
+	StartedAt     *string `json:"started_at"`
+	FinishedAt    *string `json:"finished_at"`
+	Objects       int64   `json:"objects"`
+	Bytes         int64   `json:"bytes"`
+	FailedObjects int64   `json:"failed_objects"`
+}
+
+// ObjectStorageReplication is a replication of a source bucket to one destination
+type ObjectStorageReplication struct {
+	UUID            string                              `json:"uuid"`
+	Status          string                              `json:"status"`
+	PauseReason     *string                             `json:"pause_reason"`
+	Direction       string                              `json:"direction"`
+	Source          ObjectStorageReplicationSource      `json:"source"`
+	Destination     ObjectStorageReplicationDestination `json:"destination"`
+	Rules           ObjectStorageReplicationRules       `json:"rules"`
+	Health          string                              `json:"health"`
+	HealthReason    *string                             `json:"health_reason"`
+	HealthCheckedAt *string                             `json:"health_checked_at"`
+	Backfill        ObjectStorageReplicationBackfill    `json:"backfill"`
+	ErrorMessage    *string                             `json:"error_message"`
+	CreatedAt       *string                             `json:"created_at"`
+	ActiveAt        *string                             `json:"active_at"`
+}
+
+// CreateObjectStorageReplicationDestination is the destination of POST /object-storage/replications.
+// Only the fields of the chosen type may be sent: the API refuses the others.
+type CreateObjectStorageReplicationDestination struct {
+	Type            string `json:"type"`
+	BucketUUID      string `json:"bucket_uuid,omitempty"`
+	GrantToken      string `json:"grant_token,omitempty"`
+	Provider        string `json:"provider,omitempty"`
+	Endpoint        string `json:"endpoint,omitempty"`
+	Region          string `json:"region,omitempty"`
+	Bucket          string `json:"bucket,omitempty"`
+	PathStyle       string `json:"path_style,omitempty"`
+	AccessKeyID     string `json:"access_key_id,omitempty"`
+	SecretAccessKey string `json:"secret_access_key,omitempty"`
+}
+
+// CreateObjectStorageReplicationRequest is the body of POST /object-storage/replications
+type CreateObjectStorageReplicationRequest struct {
+	SourceBucketUUID        string                                    `json:"source_bucket_uuid"`
+	Destination             CreateObjectStorageReplicationDestination `json:"destination"`
+	Prefix                  *string                                   `json:"prefix,omitempty"`
+	Tags                    []ObjectStorageLifecycleTag               `json:"tags,omitempty"`
+	DeleteMarkerReplication bool                                      `json:"delete_marker_replication"`
+	DeleteReplication       bool                                      `json:"delete_replication"`
+	ExistingObjects         bool                                      `json:"existing_objects"`
+}
+
+// ObjectStorageReplicationCreated is the answer of POST /object-storage/replications
+type ObjectStorageReplicationCreated struct {
+	Detail string `json:"detail"`
+	UUID   string `json:"uuid"`
+	Status string `json:"status"`
+}
+
+// ObjectStorageReplicationGrant is a one use authorization for another organization to replicate
+// into a bucket. Token is only set in the answer of the create.
+type ObjectStorageReplicationGrant struct {
+	UUID        string  `json:"uuid"`
+	Token       string  `json:"token,omitempty"`
+	TokenPrefix string  `json:"token_prefix"`
+	BucketUUID  string  `json:"bucket_uuid,omitempty"`
+	Note        *string `json:"note"`
+	Status      string  `json:"status,omitempty"`
+	ExpiresAt   *string `json:"expires_at"`
+	UsedAt      *string `json:"used_at"`
+	RevokedAt   *string `json:"revoked_at"`
+	CreatedAt   *string `json:"created_at"`
+}
+
+// CreateObjectStorageReplicationGrantRequest is the body of POST /object-storage/buckets/{uuid}/replication-grants
+type CreateObjectStorageReplicationGrantRequest struct {
+	Note          *string `json:"note,omitempty"`
+	ExpiresInDays int     `json:"expires_in_days,omitempty"`
+}

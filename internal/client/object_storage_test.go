@@ -284,3 +284,112 @@ func TestBucketLifecycleRoutes(t *testing.T) {
 		t.Fatalf("got %+v", (*reqs)[2])
 	}
 }
+
+func TestReplicationRoutes(t *testing.T) {
+	c, reqs := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/object-storage/replications":
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"detail":"Replication is being configured","uuid":"r1","status":"pending"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/object-storage/replications":
+			_, _ = w.Write([]byte(`[]`))
+		case r.Method == http.MethodGet:
+			_, _ = w.Write([]byte(`{"uuid":"r1","status":"active","direction":"outgoing",` +
+				`"source":{"bucket_uuid":"b1","bucket_name":"photos","same_organization":true},` +
+				`"destination":{"type":"external","endpoint":"s3.eu-west-1.amazonaws.com","region":"eu-west-1",` +
+				`"bucket":"backup","path_style":"auto","access_key_id":"****WXYZ"},` +
+				`"rules":{"enabled":true,"prefix":"img/","tags":[],"delete_marker_replication":false,` +
+				`"delete_replication":false,"existing_objects":true},"health":"ok",` +
+				`"backfill":{"status":"completed","objects":3,"bytes":10,"failed_objects":0}}`))
+		default:
+			_, _ = w.Write([]byte(`{"detail":"ok"}`))
+		}
+	})
+	ctx := context.Background()
+
+	if _, err := c.ObjectStorage.ListReplications(ctx, "outgoing", "b1"); err != nil {
+		t.Fatal(err)
+	}
+	if q := (*reqs)[0].Query; q != "bucket_uuid=b1&direction=outgoing" {
+		t.Fatalf("query %q", q)
+	}
+
+	created, err := c.ObjectStorage.CreateReplication(ctx, &CreateObjectStorageReplicationRequest{
+		SourceBucketUUID: "b1",
+		Destination:      CreateObjectStorageReplicationDestination{Type: "cubepath", BucketUUID: "b2"},
+		ExistingObjects:  true,
+	})
+	if err != nil || created.UUID != "r1" || created.Status != "pending" {
+		t.Fatalf("got %+v, %v", created, err)
+	}
+	dest := (*reqs)[1].Body["destination"].(map[string]interface{})
+	if len(dest) != 2 || dest["type"] != "cubepath" || dest["bucket_uuid"] != "b2" {
+		t.Fatalf("a CubePath destination must only carry its own fields: %v", dest)
+	}
+	if _, ok := (*reqs)[1].Body["prefix"]; ok {
+		t.Fatalf("an unset prefix must be omitted: %v", (*reqs)[1].Body)
+	}
+
+	repl, err := c.ObjectStorage.GetReplication(ctx, "r1")
+	if err != nil || repl.Destination.Endpoint == nil || *repl.Rules.Prefix != "img/" || repl.Backfill.Objects != 3 {
+		t.Fatalf("got %+v, %v", repl, err)
+	}
+
+	if err := c.ObjectStorage.UpdateReplication(ctx, "r1", map[string]interface{}{"prefix": nil}); err != nil {
+		t.Fatal(err)
+	}
+	patch := (*reqs)[3]
+	if v, ok := patch.Body["prefix"]; patch.Method != http.MethodPatch || patch.Path != "/object-storage/replications/r1" || !ok || v != nil {
+		t.Fatalf("a removed prefix must be sent as null: %+v", patch)
+	}
+
+	if err := c.ObjectStorage.DeleteReplication(ctx, "r1"); err != nil {
+		t.Fatal(err)
+	}
+	if d := (*reqs)[4]; d.Method != http.MethodDelete || d.Path != "/object-storage/replications/r1" {
+		t.Fatalf("got %+v", d)
+	}
+}
+
+func TestReplicationGrantRoutes(t *testing.T) {
+	c, reqs := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"detail":"created","uuid":"g1","token":"cprg_secret","token_prefix":"cprg_secr",` +
+				`"bucket_uuid":"b1","note":null,"expires_at":"2026-10-09T10:00:00"}`))
+		case http.MethodGet:
+			_, _ = w.Write([]byte(`[{"uuid":"g1","token_prefix":"cprg_secr","status":"open","expires_at":"2026-10-09T10:00:00"}]`))
+		default:
+			_, _ = w.Write([]byte(`{"detail":"Replication grant revoked"}`))
+		}
+	})
+	ctx := context.Background()
+
+	grant, err := c.ObjectStorage.CreateReplicationGrant(ctx, "b1", &CreateObjectStorageReplicationGrantRequest{ExpiresInDays: 7})
+	if err != nil || grant.Token != "cprg_secret" {
+		t.Fatalf("got %+v, %v", grant, err)
+	}
+	if r := (*reqs)[0]; r.Path != "/object-storage/buckets/b1/replication-grants" || r.Body["expires_in_days"] != float64(7) {
+		t.Fatalf("got %+v", r)
+	}
+	if _, ok := (*reqs)[0].Body["note"]; ok {
+		t.Fatalf("an unset note must be omitted: %v", (*reqs)[0].Body)
+	}
+
+	if g, err := c.ObjectStorage.GetReplicationGrant(ctx, "b1", "g1"); err != nil || g.Status != "open" {
+		t.Fatalf("got %+v, %v", g, err)
+	}
+	_, err = c.ObjectStorage.GetReplicationGrant(ctx, "b1", "missing")
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || !apiErr.IsNotFound() {
+		t.Fatalf("expected a 404 APIError, got %v", err)
+	}
+
+	if err := c.ObjectStorage.DeleteReplicationGrant(ctx, "g1"); err != nil {
+		t.Fatal(err)
+	}
+	if d := (*reqs)[len(*reqs)-1]; d.Method != http.MethodDelete || d.Path != "/object-storage/replication-grants/g1" {
+		t.Fatalf("got %+v", d)
+	}
+}

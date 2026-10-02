@@ -115,7 +115,7 @@ High availability with availability groups:
 
 ### 14. Object Storage
 S3 compatible Object Storage:
-- `main.tf` - Create a bucket and a read only access key, and serve the bucket through the CDN
+- `main.tf` - Create a bucket and a read only access key, and serve the bucket through the CDN, and replicate it to an external S3 compatible bucket
 
 ### 15. Managed Database
 - `main.tf` - Managed PostgreSQL with backups, tuned parameters, a database and an application user

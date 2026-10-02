@@ -160,3 +160,100 @@ func (s *ObjectStorageService) PutBucketLifecycle(ctx context.Context, uuid stri
 func (s *ObjectStorageService) DeleteBucketLifecycle(ctx context.Context, uuid string) error {
 	return s.client.Delete(ctx, lifecyclePath(uuid))
 }
+
+// ListReplications retrieves the organization's replications. direction is outgoing, incoming or
+// all ("" = all); bucketUUID limits them to one source (outgoing) or destination (incoming) bucket.
+func (s *ObjectStorageService) ListReplications(ctx context.Context, direction, bucketUUID string) ([]ObjectStorageReplication, error) {
+	q := url.Values{}
+	if direction != "" {
+		q.Set("direction", direction)
+	}
+	if bucketUUID != "" {
+		q.Set("bucket_uuid", bucketUUID)
+	}
+	path := "/object-storage/replications"
+	if len(q) > 0 {
+		path += "?" + q.Encode()
+	}
+	var result []ObjectStorageReplication
+	if err := s.client.Get(ctx, path, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func replicationPath(uuid string) string {
+	return "/object-storage/replications/" + url.PathEscape(uuid)
+}
+
+// GetReplication retrieves a replication of a source bucket of the organization
+func (s *ObjectStorageService) GetReplication(ctx context.Context, uuid string) (*ObjectStorageReplication, error) {
+	var result ObjectStorageReplication
+	if err := s.client.Get(ctx, replicationPath(uuid), &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateReplication creates a replication; it starts as pending
+func (s *ObjectStorageService) CreateReplication(ctx context.Context, req *CreateObjectStorageReplicationRequest) (*ObjectStorageReplicationCreated, error) {
+	var result ObjectStorageReplicationCreated
+	if err := s.client.Post(ctx, "/object-storage/replications", req, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UpdateReplication changes the rules, pauses or resumes, or rotates external credentials. The body
+// is a map because a null prefix or tags removes them.
+func (s *ObjectStorageService) UpdateReplication(ctx context.Context, uuid string, body map[string]interface{}) error {
+	return s.client.Patch(ctx, replicationPath(uuid), body, nil)
+}
+
+// DeleteReplication starts the removal of a replication; the data already replicated stays
+func (s *ObjectStorageService) DeleteReplication(ctx context.Context, uuid string) error {
+	return s.client.Delete(ctx, replicationPath(uuid))
+}
+
+func replicationGrantsPath(bucketUUID string) string {
+	return "/object-storage/buckets/" + url.PathEscape(bucketUUID) + "/replication-grants"
+}
+
+// CreateReplicationGrant authorizes another organization to replicate into a bucket. The token is
+// only returned by this call.
+func (s *ObjectStorageService) CreateReplicationGrant(ctx context.Context, bucketUUID string, req *CreateObjectStorageReplicationGrantRequest) (*ObjectStorageReplicationGrant, error) {
+	var result ObjectStorageReplicationGrant
+	if err := s.client.Post(ctx, replicationGrantsPath(bucketUUID), req, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListReplicationGrants retrieves the grants of a bucket (never the tokens)
+func (s *ObjectStorageService) ListReplicationGrants(ctx context.Context, bucketUUID string) ([]ObjectStorageReplicationGrant, error) {
+	var result []ObjectStorageReplicationGrant
+	if err := s.client.Get(ctx, replicationGrantsPath(bucketUUID), &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetReplicationGrant finds a grant of a bucket by UUID. The API has no detail route, so it
+// searches the list. It returns an APIError with status 404 when the grant does not exist.
+func (s *ObjectStorageService) GetReplicationGrant(ctx context.Context, bucketUUID, uuid string) (*ObjectStorageReplicationGrant, error) {
+	grants, err := s.ListReplicationGrants(ctx, bucketUUID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range grants {
+		if grants[i].UUID == uuid {
+			return &grants[i], nil
+		}
+	}
+	return nil, &APIError{StatusCode: 404, Message: "Not Found", Detail: "Replication grant not found"}
+}
+
+// DeleteReplicationGrant revokes a grant that was not used
+func (s *ObjectStorageService) DeleteReplicationGrant(ctx context.Context, uuid string) error {
+	return s.client.Delete(ctx, "/object-storage/replication-grants/"+url.PathEscape(uuid))
+}

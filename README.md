@@ -104,6 +104,8 @@ resource "cubepath_vps" "web" {
 - `cubepath_availability_group` - Manage availability groups for high availability
 - `cubepath_object_storage_bucket` - Manage S3 compatible Object Storage buckets
 - `cubepath_object_storage_access_key` - Manage Object Storage access keys for S3 clients
+- `cubepath_object_storage_replication` - Replicate an Object Storage bucket to another CubePath bucket or to an external S3 compatible bucket
+- `cubepath_object_storage_replication_grant` - Authorize another organization to replicate into one of your buckets
 - `cubepath_managed_database` - Manage Managed Databases (MySQL, PostgreSQL, Valkey): plan, replicas, backups, configuration
 - `cubepath_managed_database_database` - Manage databases inside a Managed Database
 - `cubepath_managed_database_user` - Manage users of a Managed Database
@@ -134,6 +136,7 @@ resource "cubepath_vps" "web" {
 - `cubepath_object_storage_tiers` - List Object Storage tiers with endpoint, prices and free tier
 - `cubepath_object_storage_bucket` - Look up an Object Storage bucket by name or UUID
 - `cubepath_object_storage_usage` - Object Storage usage and cost of a month
+- `cubepath_object_storage_replications` - List the Object Storage replications from and into your buckets
 - `cubepath_managed_database_plans` - List Managed Database plans per location
 - `cubepath_managed_database_credentials` - Admin connection credentials of a Managed Database
 - `cubepath_ddos_protected_ips` - List IPs with Premium DDoS protection
