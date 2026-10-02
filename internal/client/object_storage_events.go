@@ -17,13 +17,15 @@ type ObjectStorageEventDestination struct {
 		Name string `json:"name"`
 		Type string `json:"type"`
 	} `json:"notificator"`
-	PayloadFormat  string  `json:"payload_format"`
-	Status         string  `json:"status"`
-	DisabledReason *string `json:"disabled_reason"`
-	LastSuccessAt  *string `json:"last_success_at"`
-	LastFailureAt  *string `json:"last_failure_at"`
-	LastError      *string `json:"last_error"`
-	RulesCount     int     `json:"rules_count"`
+	PayloadFormat           string  `json:"payload_format"`
+	Status                  string  `json:"status"`
+	DisabledReason          *string `json:"disabled_reason"`
+	PreviousSecretExpiresAt *string `json:"previous_secret_expires_at"`
+	LastSuccessAt           *string `json:"last_success_at"`
+	LastFailureAt           *string `json:"last_failure_at"`
+	LastError               *string `json:"last_error"`
+	RulesCount              int     `json:"rules_count"`
+	CreatedAt               *string `json:"created_at"`
 }
 
 // ObjectStorageEventDestinationSecret is the answer of a create or a secret rotation, the only
@@ -31,6 +33,8 @@ type ObjectStorageEventDestination struct {
 type ObjectStorageEventDestinationSecret struct {
 	Destination   ObjectStorageEventDestination `json:"destination"`
 	SigningSecret *string                       `json:"signing_secret"`
+	// PreviousSecretExpiresAt is only set by a rotation
+	PreviousSecretExpiresAt *string `json:"previous_secret_expires_at"`
 }
 
 // CreateObjectStorageEventDestinationRequest creates a webhook (URL) or channel (NotificatorID) destination
@@ -55,7 +59,7 @@ type ObjectStorageEventRule struct {
 	UUID        string `json:"uuid"`
 	Name        string `json:"name"`
 	BucketUUID  string `json:"bucket_uuid"`
-	Destination struct {
+	Destination *struct {
 		UUID string `json:"uuid"`
 		Name string `json:"name"`
 		Type string `json:"type"`
@@ -66,6 +70,7 @@ type ObjectStorageEventRule struct {
 	Enabled      bool     `json:"enabled"`
 	Status       string   `json:"status"`
 	ErrorMessage *string  `json:"error_message"`
+	CreatedAt    *string  `json:"created_at"`
 }
 
 // CreateObjectStorageEventRuleRequest creates a rule on a bucket
@@ -148,7 +153,7 @@ func (s *ObjectStorageService) RotateEventDestinationSecret(ctx context.Context,
 	return &result, nil
 }
 
-// TestEventDestination sends a cubepath.ping event to a destination
+// TestEventDestination delivers a cubepath.ping now; the destination must be active
 func (s *ObjectStorageService) TestEventDestination(ctx context.Context, uuid string) error {
 	return s.client.Post(ctx, eventDestinationPath(uuid)+"/test", nil, nil)
 }
@@ -176,7 +181,7 @@ func (s *ObjectStorageService) GetEventRule(ctx context.Context, bucketUUID, rul
 	return nil, nil
 }
 
-// CreateEventRule creates an event rule on a bucket; it starts pending
+// CreateEventRule creates an event rule on a bucket (202); it starts pending
 func (s *ObjectStorageService) CreateEventRule(ctx context.Context, bucketUUID string, req *CreateObjectStorageEventRuleRequest) (*ObjectStorageEventRule, error) {
 	var result ObjectStorageEventRule
 	if err := s.client.Post(ctx, eventRulesPath(bucketUUID), req, &result); err != nil {

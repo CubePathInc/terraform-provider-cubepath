@@ -33,7 +33,7 @@ resource "cubepath_object_storage_event_rule" "new_photos" {
 - `bucket_uuid` (String) UUID of the bucket. Changing it forces a new rule.
 - `destination_uuid` (String) UUID of the event destination. It must be enabled.
 - `events` (Set of String) Event types: object.created, object.removed and/or object.tagging (1 to 3).
-- `name` (String) Rule name.
+- `name` (String) Rule name: 1 to 64 letters, digits, hyphens and spaces.
 
 ### Optional
 

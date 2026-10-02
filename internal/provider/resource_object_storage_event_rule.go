@@ -72,7 +72,7 @@ func (r *objectStorageEventRuleResource) Schema(_ context.Context, _ resource.Sc
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"name": schema.StringAttribute{
-				Description: "Rule name.",
+				Description: "Rule name: 1 to 64 letters, digits, hyphens and spaces.",
 				Required:    true,
 			},
 			"destination_uuid": schema.StringAttribute{
@@ -377,7 +377,9 @@ func mapEventRule(ctx context.Context, m *objectStorageEventRuleModel, rule *cli
 	m.ID = types.StringValue(rule.UUID)
 	m.BucketUUID = types.StringValue(rule.BucketUUID)
 	m.Name = types.StringValue(rule.Name)
-	m.DestinationUUID = types.StringValue(rule.Destination.UUID)
+	if rule.Destination != nil {
+		m.DestinationUUID = types.StringValue(rule.Destination.UUID)
+	}
 	events, diags := types.SetValueFrom(ctx, types.StringType, rule.Events)
 	m.Events = events
 	m.Prefix = types.StringValue(rule.Prefix)

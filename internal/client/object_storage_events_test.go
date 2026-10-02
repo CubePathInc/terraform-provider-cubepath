@@ -13,9 +13,10 @@ func TestEventDestinationRoutesAndSecret(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(`{"destination":{"uuid":"d1","name":"hook","type":"webhook","url_masked":"https://example.com/***","status":"active"},"signing_secret":"whsec_x"}`))
 		case r.URL.Path == "/object-storage/buckets/b1/event-rules" && r.Method == http.MethodGet:
-			_, _ = w.Write([]byte(`[{"uuid":"r1","bucket_uuid":"b1","status":"active","events":["object.created"]},{"uuid":"r2","bucket_uuid":"b1","status":"pending"}]`))
+			_, _ = w.Write([]byte(`[{"uuid":"r1","bucket_uuid":"b1","destination":{"uuid":"d1","name":"hook","type":"webhook"},"status":"active","events":["object.created"],"created_at":"2026-10-02T10:00:00"},{"uuid":"r2","bucket_uuid":"b1","destination":null,"status":"pending"}]`))
 		case r.Method == http.MethodDelete:
-			w.WriteHeader(http.StatusNoContent)
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"detail":"Event rule deleted. The bucket stops sending its events within a minute."}`))
 		default:
 			_, _ = w.Write([]byte(`{"uuid":"d1","status":"active"}`))
 		}
@@ -40,7 +41,7 @@ func TestEventDestinationRoutesAndSecret(t *testing.T) {
 		t.Fatal(err)
 	}
 	rule, err := c.ObjectStorage.GetEventRule(ctx, "b1", "r2")
-	if err != nil || rule == nil || rule.Status != "pending" {
+	if err != nil || rule == nil || rule.Status != "pending" || rule.Destination != nil {
 		t.Fatalf("got %+v, %v", rule, err)
 	}
 	if missing, err := c.ObjectStorage.GetEventRule(ctx, "b1", "r9"); err != nil || missing != nil {

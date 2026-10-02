@@ -89,7 +89,11 @@ func TestEventRuleUpdateAndMapping(t *testing.T) {
 	msg := "bucket busy"
 	var state objectStorageEventRuleModel
 	rule := &client.ObjectStorageEventRule{UUID: "r1", BucketUUID: "b1", Name: "uploads", Events: []string{"object.created"}, Prefix: "in/", Enabled: true, Status: "error", ErrorMessage: &msg}
-	rule.Destination.UUID = "d1"
+	rule.Destination = &struct {
+		UUID string `json:"uuid"`
+		Name string `json:"name"`
+		Type string `json:"type"`
+	}{UUID: "d1"}
 	diags.Append(mapEventRule(ctx, &state, rule)...)
 	if diags.HasError() || state.DestinationUUID.ValueString() != "d1" || state.ErrorMessage.ValueString() != msg || state.Suffix.ValueString() != "" {
 		t.Fatalf("mapped %+v %v", state, diags)

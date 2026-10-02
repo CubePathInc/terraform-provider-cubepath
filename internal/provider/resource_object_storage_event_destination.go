@@ -68,7 +68,7 @@ func (r *objectStorageEventDestinationResource) Schema(_ context.Context, _ reso
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"name": schema.StringAttribute{
-				Description: "Destination name (1 to 64 characters).",
+				Description: "Destination name: 1 to 64 letters, digits, hyphens and spaces.",
 				Required:    true,
 			},
 			"type": schema.StringAttribute{

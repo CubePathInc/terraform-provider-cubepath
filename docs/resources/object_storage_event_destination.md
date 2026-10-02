@@ -36,7 +36,7 @@ resource "cubepath_object_storage_event_destination" "ops" {
 
 Every webhook delivery carries `CubePath-Timestamp` (unix seconds) and `CubePath-Signature: v1=<hex>`,
 the HMAC-SHA256 of `timestamp + "." + raw body` with the signing secret. Compare in constant time, accept
-any of the `v1=` values (there are two for 24 hours after a secret rotation) and reject timestamps more
+any of the `v1=` values (`v1=<new>, v1=<previous>` for 24 hours after a secret rotation) and reject timestamps more
 than 5 minutes away. Rotate the secret with `cubecli s3 events destination rotate-secret` or the API; Terraform
 keeps the secret it got at creation.
 
@@ -45,7 +45,7 @@ keeps the secret it got at creation.
 
 ### Required
 
-- `name` (String) Destination name (1 to 64 characters).
+- `name` (String) Destination name: 1 to 64 letters, digits, hyphens and spaces.
 - `type` (String) webhook or notificator (a Cloud Alerts channel). Changing it forces a new destination.
 
 ### Optional
