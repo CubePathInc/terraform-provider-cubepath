@@ -2,13 +2,20 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
+
+	"github.com/cubepath/terraform-provider-cubepath/internal/client"
 )
 
 func strp(s string) *string { return &s }
@@ -90,5 +97,179 @@ func TestBucketValidateConfigRejectsBadTags(t *testing.T) {
 	})}, resp)
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics %v", resp.Diagnostics)
+	}
+}
+
+// bucketValues is a full resource object with every attribute null except the given ones.
+func bucketValues(ctx context.Context, schemaResp resource.SchemaResponse, set map[string]tftypes.Value) tftypes.Value {
+	objType := schemaResp.Schema.Type().TerraformType(ctx).(tftypes.Object)
+	vals := map[string]tftypes.Value{}
+	for name, typ := range objType.AttributeTypes {
+		vals[name] = tftypes.NewValue(typ, nil)
+	}
+	for name, v := range set {
+		vals[name] = v
+	}
+	return tftypes.NewValue(objType, vals)
+}
+
+func tagsValue(tags map[string]string) tftypes.Value {
+	elems := map[string]tftypes.Value{}
+	for k, v := range tags {
+		elems[k] = tftypes.NewValue(tftypes.String, v)
+	}
+	return tftypes.NewValue(tftypes.Map{ElementType: tftypes.String}, elems)
+}
+
+// Tags set from the dashboard must survive a plan whose configuration has no tags: the
+// attribute has no default, so the plan keeps the bucket's tags instead of {}.
+func TestBucketPlanWithoutTagsKeepsTheBucketTags(t *testing.T) {
+	ctx := context.Background()
+	server, err := providerserver.NewProtocol6WithError(New("test")())()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &objectStorageBucketResource{}
+	var schemaResp resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+	objType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	common := map[string]tftypes.Value{
+		"id":   tftypes.NewValue(tftypes.String, "b-1"),
+		"name": tftypes.NewValue(tftypes.String, "photos"),
+		"tier": tftypes.NewValue(tftypes.String, "infrequent_access"),
+	}
+	with := func(extra map[string]tftypes.Value) map[string]tftypes.Value {
+		m := map[string]tftypes.Value{}
+		for k, v := range common {
+			m[k] = v
+		}
+		for k, v := range extra {
+			m[k] = v
+		}
+		return m
+	}
+	dyn := func(v tftypes.Value) *tfprotov6.DynamicValue {
+		d, err := tfprotov6.NewDynamicValue(objType, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &d
+	}
+	dashboardTags := tagsValue(map[string]string{"env": "prod"})
+	prior := bucketValues(ctx, schemaResp, with(map[string]tftypes.Value{
+		"protected":  tftypes.NewValue(tftypes.Bool, false),
+		"versioning": tftypes.NewValue(tftypes.String, "off"),
+		"tags":       dashboardTags,
+	}))
+
+	plan := func(config map[string]tftypes.Value) tftypes.Value {
+		cfg := bucketValues(ctx, schemaResp, with(config))
+		// Terraform proposes the prior value for an optional computed attribute left out of the
+		// configuration, and the configured value otherwise.
+		proposed := with(config)
+		if _, ok := config["tags"]; !ok {
+			proposed["tags"] = dashboardTags
+		}
+		if _, ok := config["versioning"]; !ok {
+			proposed["versioning"] = tftypes.NewValue(tftypes.String, "off")
+		}
+		resp, err := server.PlanResourceChange(ctx, &tfprotov6.PlanResourceChangeRequest{
+			TypeName:         "cubepath_object_storage_bucket",
+			PriorState:       dyn(prior),
+			Config:           dyn(cfg),
+			ProposedNewState: dyn(bucketValues(ctx, schemaResp, proposed)),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, d := range resp.Diagnostics {
+			t.Fatalf("%s: %s", d.Summary, d.Detail)
+		}
+		planned, err := resp.PlannedState.Unmarshal(objType)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var attrs map[string]tftypes.Value
+		if err := planned.As(&attrs); err != nil {
+			t.Fatal(err)
+		}
+		return attrs["tags"]
+	}
+
+	// No tags in the configuration, another attribute changes: the tags stay as they are.
+	if got := plan(map[string]tftypes.Value{"protected": tftypes.NewValue(tftypes.Bool, true)}); !got.Equal(dashboardTags) {
+		t.Errorf("tags left out: planned %v, want %v", got, dashboardTags)
+	}
+	// Declared tags are managed as a whole, {} included.
+	declared := tagsValue(map[string]string{"team": "data"})
+	if got := plan(map[string]tftypes.Value{"tags": declared}); !got.Equal(declared) {
+		t.Errorf("declared tags: planned %v, want %v", got, declared)
+	}
+	empty := tagsValue(map[string]string{})
+	if got := plan(map[string]tftypes.Value{"tags": empty}); !got.Equal(empty) {
+		t.Errorf("tags = {}: planned %v, want {}", got)
+	}
+}
+
+// Update sends tags only when the plan changes them.
+func TestBucketUpdateSendsTagsOnlyWhenTheyChange(t *testing.T) {
+	ctx := context.Background()
+	var patches []map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPatch:
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			patches = append(patches, body)
+			_, _ = w.Write([]byte(`{"detail":"Bucket updated"}`))
+		default:
+			_, _ = w.Write([]byte(`{"uuid":"b-1","name":"photos","status":"active","versioning":"off",` +
+				`"protected":true,"tier":{"slug":"infrequent_access"},"tags":{"env":"prod"}}`))
+		}
+	}))
+	defer srv.Close()
+	c, err := client.NewClient("token", srv.URL, client.WithMaxRetries(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &objectStorageBucketResource{client: c}
+	var schemaResp resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+
+	base := map[string]tftypes.Value{
+		"id":         tftypes.NewValue(tftypes.String, "b-1"),
+		"name":       tftypes.NewValue(tftypes.String, "photos"),
+		"tier":       tftypes.NewValue(tftypes.String, "infrequent_access"),
+		"versioning": tftypes.NewValue(tftypes.String, "off"),
+		"protected":  tftypes.NewValue(tftypes.Bool, false),
+		"tags":       tagsValue(map[string]string{"env": "prod"}),
+	}
+	update := func(planTags tftypes.Value) {
+		planVals := map[string]tftypes.Value{}
+		for k, v := range base {
+			planVals[k] = v
+		}
+		planVals["protected"] = tftypes.NewValue(tftypes.Bool, true)
+		planVals["tags"] = planTags
+		state := tfsdk.State{Schema: schemaResp.Schema, Raw: bucketValues(ctx, schemaResp, base)}
+		plan := tfsdk.Plan{Schema: schemaResp.Schema, Raw: bucketValues(ctx, schemaResp, planVals)}
+		resp := &resource.UpdateResponse{State: state}
+		r.Update(ctx, resource.UpdateRequest{Plan: plan, State: state}, resp)
+		if resp.Diagnostics.HasError() {
+			t.Fatalf("update: %v", resp.Diagnostics)
+		}
+	}
+
+	update(tagsValue(map[string]string{"env": "prod"}))
+	update(tagsValue(map[string]string{}))
+	if len(patches) != 2 {
+		t.Fatalf("patches %v", patches)
+	}
+	if _, ok := patches[0]["tags"]; ok {
+		t.Errorf("unchanged tags were sent: %v", patches[0])
+	}
+	if tags, ok := patches[1]["tags"].(map[string]any); !ok || len(tags) != 0 {
+		t.Errorf("tags = {} should send an empty map: %v", patches[1])
 	}
 }

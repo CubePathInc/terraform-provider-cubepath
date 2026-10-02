@@ -19,7 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -116,12 +116,16 @@ func (r *objectStorageBucketResource) Schema(_ context.Context, _ resource.Schem
 			"tags": schema.MapAttribute{
 				Description: "Labels to organize and filter buckets, as key = value. At most 50; keys 1 to 128 and values " +
 					"0 to 256 characters of letters, numbers, spaces and _ . : / = + - @. Keys cannot contain =, start or end " +
-					"with a space, or start with aws:, cp: or cubepath:. Changed in place; tags edited outside Terraform show " +
-					"as drift. Bucket tags are not visible through S3 (GetBucketTagging and PutBucketTagging answer 403).",
+					"with a space, or start with aws:, cp: or cubepath:. Changed in place; when set, tags edited outside Terraform show " +
+					"as drift. Without tags in the configuration Terraform leaves the bucket's tags alone (they may be set " +
+					"from the dashboard); with tags it manages every tag, and {} removes them all. Bucket tags are not " +
+					"visible through S3 (GetBucketTagging and PutBucketTagging answer 403).",
 				ElementType: types.StringType,
 				Optional:    true,
-				Computed:    true,
-				Default:     mapdefault.StaticValue(types.MapValueMust(types.StringType, map[string]attr.Value{})),
+				// Computed without a default: an omitted tags keeps whatever the bucket has instead of
+				// planning {} and wiping tags set outside Terraform.
+				Computed:      true,
+				PlanModifiers: []planmodifier.Map{mapplanmodifier.UseStateForUnknown()},
 			},
 			"force_destroy": schema.BoolAttribute{
 				Description: "Delete every object, version and unfinished upload when the bucket is destroyed. " +

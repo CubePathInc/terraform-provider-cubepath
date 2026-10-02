@@ -13,8 +13,13 @@ Manages a CubePath Object Storage (S3 compatible) bucket. Buckets are private: u
 ## Tags
 
 `tags` labels the bucket for organizing and filtering (the dashboard, `cubecli s3 bucket list --tag`
-and the API filter on them). Changing them updates the bucket in place, and tags edited from the
-dashboard or the API show up as drift in the next plan. Leaving `tags` out removes every tag.
+and the API filter on them). Changing them updates the bucket in place.
+
+- **`tags` left out**: Terraform does not manage the bucket's tags. Tags set from the dashboard or
+  the API stay as they are, are recorded in the state and never show as drift. Removing `tags`
+  from a configuration that had it stops managing them and leaves the current tags on the bucket.
+- **`tags` set**: Terraform manages every tag. Tags edited elsewhere show up as drift in the next
+  plan and are put back; `tags = {}` removes them all.
 
 ```terraform
 resource "cubepath_object_storage_bucket" "logs" {
@@ -45,7 +50,7 @@ with `tags`.
 - `force_destroy` (Boolean) Delete every object, version and unfinished upload when the bucket is destroyed. Without it, destroying a bucket that is not empty fails.
 - `project_id` (Number) Project ID. Defaults to the organization's first project. Changing it forces a new bucket.
 - `protected` (Boolean) Deletion protection. A protected bucket cannot be deleted until this is set to false.
-- `tags` (Map of String) Labels to organize and filter buckets, as key = value. At most 50; keys 1 to 128 and values 0 to 256 characters of letters, numbers, spaces and _ . : / = + - @. Keys cannot contain =, start or end with a space, or start with aws:, cp: or cubepath:. Changed in place; tags edited outside Terraform show as drift. Bucket tags are not visible through S3 (GetBucketTagging and PutBucketTagging answer 403).
+- `tags` (Map of String) Labels to organize and filter buckets, as key = value. At most 50; keys 1 to 128 and values 0 to 256 characters of letters, numbers, spaces and _ . : / = + - @. Keys cannot contain =, start or end with a space, or start with aws:, cp: or cubepath:. Changed in place; when set, tags edited outside Terraform show as drift. Without tags in the configuration Terraform leaves the bucket's tags alone (they may be set from the dashboard); with tags it manages every tag, and {} removes them all. Bucket tags are not visible through S3 (GetBucketTagging and PutBucketTagging answer 403).
 - `versioning` (String) Object versioning: off, enabled or suspended. A new bucket can only start as off or enabled, and once enabled it cannot go back to off (suspend it instead).
 
 ### Read-Only
