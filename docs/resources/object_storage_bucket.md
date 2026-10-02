@@ -108,12 +108,21 @@ a bucket.
 
 ### Read-Only
 
+- `encryption` (Attributes) Encryption at rest of the bucket's objects (SSE-S3, always on, nothing to configure). Null until the bucket default is applied; algorithm is AES256 and scope is all_objects, or new_objects while objects uploaded before the default may still be stored unencrypted (they are re-encrypted in the background). (see [below for nested schema](#nestedatt--encryption))
 - `endpoint` (String) S3 endpoint to configure in clients (for example https://eu.cubestorage.io).
 - `id` (String) The UUID of the bucket.
 - `location_name` (String) Location of the tier's storage cluster.
 - `locked_content_kept` (Boolean) True when the last delete left object versions protected by Object Lock (retention or legal hold) in the bucket; it keeps being billed until they expire and it is deleted again.
 - `region` (String) S3 region to configure in clients (for example eu).
 - `status` (String) Bucket status: pending, active, suspended, blocked, error or deleting.
+
+<a id="nestedatt--encryption"></a>
+### Nested Schema for `encryption`
+
+Read-Only:
+
+- `algorithm` (String) AES256.
+- `scope` (String) all_objects or new_objects.
 
 <a id="nestedatt--object_lock_default_retention"></a>
 ### Nested Schema for `object_lock_default_retention`

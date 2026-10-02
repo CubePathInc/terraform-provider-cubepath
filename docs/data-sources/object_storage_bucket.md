@@ -26,6 +26,7 @@ Fetches an Object Storage bucket by UUID or by name.
 - `cdn_domain` (String) CDN domain serving the bucket, if any.
 - `cdn_origin_uuid` (String) UUID of the CDN origin serving the bucket, if any.
 - `cdn_zone_uuid` (String) UUID of the CDN zone serving the bucket, if any.
+- `encryption` (Attributes) Encryption at rest of the bucket's objects (SSE-S3, always on, nothing to configure). Null until the bucket default is applied; algorithm is AES256 and scope is all_objects, or new_objects while objects uploaded before the default may still be stored unencrypted (they are re-encrypted in the background). (see [below for nested schema](#nestedatt--encryption))
 - `endpoint` (String) S3 endpoint.
 - `location_name` (String) Location of the storage cluster.
 - `locked_content_kept` (Boolean) True when the last delete left object versions protected by Object Lock in the bucket.
@@ -44,6 +45,14 @@ Fetches an Object Storage bucket by UUID or by name.
 - `versioning` (String) Versioning: off, enabled or suspended.
 - `virtual_host_url` (String) Virtual-hosted URL of the bucket (bucket.endpoint host).
 - `write_blocked` (Boolean) True while uploads to the bucket are paused.
+
+<a id="nestedatt--encryption"></a>
+### Nested Schema for `encryption`
+
+Read-Only:
+
+- `algorithm` (String) AES256.
+- `scope` (String) all_objects or new_objects.
 
 <a id="nestedatt--object_lock_default_retention"></a>
 ### Nested Schema for `object_lock_default_retention`

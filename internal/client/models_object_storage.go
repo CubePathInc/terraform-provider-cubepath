@@ -82,6 +82,16 @@ type ObjectStorageBucket struct {
 	LockedContentKept bool                           `json:"locked_content_kept"`
 	Connection        *ObjectStorageBucketConnection `json:"connection"`
 	CDN               *ObjectStorageBucketCDN        `json:"cdn"`
+	// Encryption is the encryption at rest of the bucket; nil until the bucket default is applied
+	Encryption *ObjectStorageBucketEncryption `json:"encryption"`
+}
+
+// ObjectStorageBucketEncryption is the encryption at rest of a bucket: Algorithm AES256 (SSE-S3)
+// and Scope all_objects, or new_objects while objects written before the bucket default may
+// still be stored unencrypted
+type ObjectStorageBucketEncryption struct {
+	Algorithm string `json:"algorithm"`
+	Scope     string `json:"scope"`
 }
 
 // ObjectStorageLockRetention is a default retention rule: a mode (governance or compliance)

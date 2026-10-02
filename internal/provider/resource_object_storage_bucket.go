@@ -21,6 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -69,7 +70,31 @@ type objectStorageBucketResourceModel struct {
 	AcceptObjectLockTerms      types.Bool   `tfsdk:"accept_object_lock_terms"`
 	BypassGovernanceOnDestroy  types.Bool   `tfsdk:"bypass_governance_on_destroy"`
 	LockedContentKept          types.Bool   `tfsdk:"locked_content_kept"`
+	Encryption                 types.Object `tfsdk:"encryption"`
 }
+
+// encryptionAttrTypes is the shape of encryption.
+var encryptionAttrTypes = map[string]attr.Type{
+	"algorithm": types.StringType,
+	"scope":     types.StringType,
+}
+
+// encryptionToObject converts the API encryption block; null until the bucket default is applied.
+func encryptionToObject(e *client.ObjectStorageBucketEncryption) types.Object {
+	if e == nil {
+		return types.ObjectNull(encryptionAttrTypes)
+	}
+	return types.ObjectValueMust(encryptionAttrTypes, map[string]attr.Value{
+		"algorithm": types.StringValue(e.Algorithm),
+		"scope":     types.StringValue(e.Scope),
+	})
+}
+
+// encryptionDescription documents the encryption attribute in the resource and the data source.
+const encryptionDescription = "Encryption at rest of the bucket's objects (SSE-S3, always on, nothing to " +
+	"configure). Null until the bucket default is applied; algorithm is AES256 and scope is all_objects, or " +
+	"new_objects while objects uploaded before the default may still be stored unencrypted (they are " +
+	"re-encrypted in the background)."
 
 // lockRetentionAttrTypes is the shape of object_lock_default_retention.
 var lockRetentionAttrTypes = map[string]attr.Type{
@@ -209,6 +234,15 @@ func (r *objectStorageBucketResource) Schema(_ context.Context, _ resource.Schem
 					"or legal hold) in the bucket; it keeps being billed until they expire and it is deleted again.",
 				Computed:      true,
 				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+			},
+			"encryption": schema.SingleNestedAttribute{
+				Description:   encryptionDescription,
+				Computed:      true,
+				PlanModifiers: []planmodifier.Object{objectplanmodifier.UseStateForUnknown()},
+				Attributes: map[string]schema.Attribute{
+					"algorithm": schema.StringAttribute{Description: "AES256.", Computed: true},
+					"scope":     schema.StringAttribute{Description: "all_objects or new_objects.", Computed: true},
+				},
 			},
 			"status": schema.StringAttribute{
 				Description: "Bucket status: pending, active, suspended, blocked, error or deleting.",
@@ -758,6 +792,7 @@ func (r *objectStorageBucketResource) mapToState(state *objectStorageBucketResou
 	state.ObjectLockEnabled = types.BoolValue(bucket.ObjectLock.Enabled)
 	state.ObjectLockDefaultRetention = retentionToObject(bucket.ObjectLock.DefaultRetention)
 	state.LockedContentKept = types.BoolValue(bucket.LockedContentKept)
+	state.Encryption = encryptionToObject(bucket.Encryption)
 	if state.BypassGovernanceOnDestroy.IsNull() || state.BypassGovernanceOnDestroy.IsUnknown() {
 		state.BypassGovernanceOnDestroy = types.BoolValue(false)
 	}

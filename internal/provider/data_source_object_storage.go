@@ -198,6 +198,7 @@ type objectStorageBucketDataSourceModel struct {
 	ObjectLockEnabled          types.Bool   `tfsdk:"object_lock_enabled"`
 	ObjectLockDefaultRetention types.Object `tfsdk:"object_lock_default_retention"`
 	LockedContentKept          types.Bool   `tfsdk:"locked_content_kept"`
+	Encryption                 types.Object `tfsdk:"encryption"`
 }
 
 func (d *objectStorageBucketDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -253,6 +254,14 @@ func (d *objectStorageBucketDataSource) Schema(_ context.Context, _ datasource.S
 			"locked_content_kept": schema.BoolAttribute{
 				Description: "True when the last delete left object versions protected by Object Lock in the bucket.",
 				Computed:    true,
+			},
+			"encryption": schema.SingleNestedAttribute{
+				Description: encryptionDescription,
+				Computed:    true,
+				Attributes: map[string]schema.Attribute{
+					"algorithm": str("AES256."),
+					"scope":     str("all_objects or new_objects."),
+				},
 			},
 		},
 	}
@@ -332,6 +341,7 @@ func (d *objectStorageBucketDataSource) Read(ctx context.Context, req datasource
 		ObjectLockEnabled:          types.BoolValue(bucket.ObjectLock.Enabled),
 		ObjectLockDefaultRetention: retentionToObject(bucket.ObjectLock.DefaultRetention),
 		LockedContentKept:          types.BoolValue(bucket.LockedContentKept),
+		Encryption:                 encryptionToObject(bucket.Encryption),
 	}
 	state.VirtualHostURL = types.StringNull()
 	if bucket.ProjectID != nil {

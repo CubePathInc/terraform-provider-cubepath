@@ -529,3 +529,23 @@ func TestAccessKeyBypassGovernanceNeedsReadWrite(t *testing.T) {
 		t.Error("bypass_governance on a read_only key must fail")
 	}
 }
+
+func TestBucketEncryptionInState(t *testing.T) {
+	r := &objectStorageBucketResource{}
+	var state objectStorageBucketResourceModel
+	bucket := &client.ObjectStorageBucket{
+		UUID:       "b1",
+		Name:       "photos",
+		Encryption: &client.ObjectStorageBucketEncryption{Algorithm: "AES256", Scope: "new_objects"},
+	}
+	r.mapToState(&state, bucket)
+	attrs := state.Encryption.Attributes()
+	if attrs["algorithm"].(types.String).ValueString() != "AES256" || attrs["scope"].(types.String).ValueString() != "new_objects" {
+		t.Fatalf("encryption %v", state.Encryption)
+	}
+	bucket.Encryption = nil
+	r.mapToState(&state, bucket)
+	if !state.Encryption.IsNull() {
+		t.Fatalf("null encryption mapped to %v", state.Encryption)
+	}
+}
