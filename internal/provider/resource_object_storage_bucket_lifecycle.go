@@ -30,7 +30,7 @@ var (
 	_ resource.ResourceWithValidateConfig = &objectStorageBucketLifecycleResource{}
 )
 
-// The API applies a change within seconds, or up to 10 minutes after a previous change of the
+// The API applies a change within seconds, or up to about 12 minutes after a previous change of the
 // same bucket (one write to the storage service per bucket every 10 minutes).
 const lifecycleApplyTimeout = 20 * time.Minute
 
@@ -80,7 +80,7 @@ func (r *objectStorageBucketLifecycleResource) Schema(_ context.Context, _ resou
 			"objects after a number of days or on a date, noncurrent versions, orphan delete markers and " +
 			"incomplete multipart uploads. Objects are removed within 48 hours of their due date. In a " +
 			"versioned bucket an expiration only adds a delete marker: add noncurrent_days to free the space. " +
-			"Create and update wait until the rules are applied (seconds, up to 10 minutes after a previous " +
+			"Create and update wait until the rules are applied (seconds, up to about 12 minutes after a previous " +
 			"change of the same bucket). Destroying it removes every rule. Import with the bucket UUID.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{

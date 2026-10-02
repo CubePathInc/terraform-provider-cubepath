@@ -3,12 +3,12 @@
 page_title: "cubepath_object_storage_bucket_lifecycle Resource - cubepath"
 subcategory: ""
 description: |-
-  Manages every lifecycle rule of a CubePath Object Storage bucket (one resource per bucket: it replaces any rule set elsewhere). Rules delete objects in the background, permanently: current objects after a number of days or on a date, noncurrent versions, orphan delete markers and incomplete multipart uploads. Objects are removed within 48 hours of their due date. In a versioned bucket an expiration only adds a delete marker: add noncurrent_days to free the space. Create and update wait until the rules are applied (seconds, up to 10 minutes after a previous change of the same bucket). Destroying it removes every rule. Import with the bucket UUID.
+  Manages every lifecycle rule of a CubePath Object Storage bucket (one resource per bucket: it replaces any rule set elsewhere). Rules delete objects in the background, permanently: current objects after a number of days or on a date, noncurrent versions, orphan delete markers and incomplete multipart uploads. Objects are removed within 48 hours of their due date. In a versioned bucket an expiration only adds a delete marker: add noncurrent_days to free the space. Create and update wait until the rules are applied (seconds, up to about 12 minutes after a previous change of the same bucket). Destroying it removes every rule. Import with the bucket UUID.
 ---
 
 # cubepath_object_storage_bucket_lifecycle (Resource)
 
-Manages every lifecycle rule of a CubePath Object Storage bucket (one resource per bucket: it replaces any rule set elsewhere). Rules delete objects in the background, permanently: current objects after a number of days or on a date, noncurrent versions, orphan delete markers and incomplete multipart uploads. Objects are removed within 48 hours of their due date. In a versioned bucket an expiration only adds a delete marker: add noncurrent_days to free the space. Create and update wait until the rules are applied (seconds, up to 10 minutes after a previous change of the same bucket). Destroying it removes every rule. Import with the bucket UUID.
+Manages every lifecycle rule of a CubePath Object Storage bucket (one resource per bucket: it replaces any rule set elsewhere). Rules delete objects in the background, permanently: current objects after a number of days or on a date, noncurrent versions, orphan delete markers and incomplete multipart uploads. Objects are removed within 48 hours of their due date. In a versioned bucket an expiration only adds a delete marker: add noncurrent_days to free the space. Create and update wait until the rules are applied (seconds, up to about 12 minutes after a previous change of the same bucket). Destroying it removes every rule. Import with the bucket UUID.
 
 
 
