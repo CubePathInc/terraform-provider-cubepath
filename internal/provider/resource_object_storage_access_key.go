@@ -11,6 +11,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -49,6 +51,8 @@ type objectStorageAccessKeyResourceModel struct {
 	Status          types.String `tfsdk:"status"`
 	Region          types.String `tfsdk:"region"`
 	Endpoint        types.String `tfsdk:"endpoint"`
+	// BypassGovernance lets a read_write key delete versions under governance retention
+	BypassGovernance types.Bool `tfsdk:"bypass_governance"`
 }
 
 func (r *objectStorageAccessKeyResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -106,6 +110,15 @@ func (r *objectStorageAccessKeyResource) Schema(_ context.Context, _ resource.Sc
 				Optional:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
+			"bypass_governance": schema.BoolAttribute{
+				Description: "Allow this key to delete or overwrite object versions under governance retention " +
+					"in buckets with Object Lock, by sending the x-amz-bypass-governance-retention: true header. " +
+					"Only for read_write keys. Changing it forces a new key. Defaults to false.",
+				Optional:      true,
+				Computed:      true,
+				Default:       booldefault.StaticBool(false),
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.RequiresReplace()},
+			},
 			"access_key_id": schema.StringAttribute{
 				Description:   "The access key ID to configure in S3 clients.",
 				Computed:      true,
@@ -158,6 +171,13 @@ func (r *objectStorageAccessKeyResource) ValidateConfig(ctx context.Context, req
 				"permission must be read_write or read_only.")
 		}
 	}
+	var bypass types.Bool
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("bypass_governance"), &bypass)...)
+	// permission defaults to read_write, so only an explicit read_only conflicts.
+	if bypass.ValueBool() && !permission.IsUnknown() && permission.ValueString() == "read_only" {
+		resp.Diagnostics.AddAttributeError(path.Root("bypass_governance"), "Invalid bypass_governance",
+			"bypass_governance can only be given to read_write keys.")
+	}
 	if !expiresAt.IsNull() && !expiresAt.IsUnknown() {
 		if _, err := time.Parse(time.RFC3339, expiresAt.ValueString()); err != nil {
 			resp.Diagnostics.AddAttributeError(path.Root("expires_at"), "Invalid expires_at",
@@ -177,6 +197,8 @@ func (r *objectStorageAccessKeyResource) Create(ctx context.Context, req resourc
 		Name:       plan.Name.ValueString(),
 		Tier:       plan.Tier.ValueString(),
 		Permission: plan.Permission.ValueString(),
+		// Only sent when true (omitempty): the API refuses it on read_only keys.
+		BypassGovernance: plan.BypassGovernance.ValueBool(),
 	}
 	if !plan.ProjectID.IsNull() && !plan.ProjectID.IsUnknown() {
 		pid := int(plan.ProjectID.ValueInt64())
@@ -359,6 +381,7 @@ func (r *objectStorageAccessKeyResource) mapToState(state *objectStorageAccessKe
 	state.Status = types.StringValue(key.Status)
 	state.Region = types.StringValue(key.Region)
 	state.Endpoint = types.StringValue(key.Endpoint)
+	state.BypassGovernance = types.BoolValue(key.BypassGovernance)
 	if state.SecretAccessKey.IsUnknown() {
 		state.SecretAccessKey = types.StringNull()
 	}

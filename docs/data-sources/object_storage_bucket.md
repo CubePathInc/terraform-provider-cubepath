@@ -28,6 +28,9 @@ Fetches an Object Storage bucket by UUID or by name.
 - `cdn_zone_uuid` (String) UUID of the CDN zone serving the bucket, if any.
 - `endpoint` (String) S3 endpoint.
 - `location_name` (String) Location of the storage cluster.
+- `locked_content_kept` (Boolean) True when the last delete left object versions protected by Object Lock in the bucket.
+- `object_lock_default_retention` (Attributes) Default retention of the bucket (null when it has none). (see [below for nested schema](#nestedatt--object_lock_default_retention))
+- `object_lock_enabled` (Boolean) True when the bucket was created with Object Lock.
 - `objects_count` (Number) Number of objects, refreshed every 15 minutes.
 - `path_style_url` (String) Path-style URL of the bucket (endpoint/bucket).
 - `project_id` (Number) Project ID.
@@ -41,3 +44,12 @@ Fetches an Object Storage bucket by UUID or by name.
 - `versioning` (String) Versioning: off, enabled or suspended.
 - `virtual_host_url` (String) Virtual-hosted URL of the bucket (bucket.endpoint host).
 - `write_blocked` (Boolean) True while uploads to the bucket are paused.
+
+<a id="nestedatt--object_lock_default_retention"></a>
+### Nested Schema for `object_lock_default_retention`
+
+Read-Only:
+
+- `days` (Number) Retention in days (null when set in years).
+- `mode` (String) governance or compliance.
+- `years` (Number) Retention in years (null when set in days).

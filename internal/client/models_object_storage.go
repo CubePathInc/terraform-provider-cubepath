@@ -60,34 +60,62 @@ type ObjectStorageBucketCDN struct {
 
 // ObjectStorageBucket represents a bucket (list and detail)
 type ObjectStorageBucket struct {
-	UUID          string                         `json:"uuid"`
-	Name          string                         `json:"name"`
-	Status        string                         `json:"status"`
-	SuspendReason *string                        `json:"suspend_reason"`
-	WriteBlocked  bool                           `json:"write_blocked"`
-	ErrorMessage  *string                        `json:"error_message"`
-	ProjectID     *int                           `json:"project_id"`
-	Tier          ObjectStorageTierSummary       `json:"tier"`
-	LocationName  string                         `json:"location_name"`
-	Region        string                         `json:"region"`
-	Endpoint      string                         `json:"endpoint"`
-	Versioning    string                         `json:"versioning"`
-	Protected     bool                           `json:"protected"`
-	SizeBytes     int64                          `json:"size_bytes"`
-	ObjectsCount  int64                          `json:"objects_count"`
-	CDNConnected  bool                           `json:"cdn_connected"`
-	Tags          map[string]string              `json:"tags"`
-	Connection    *ObjectStorageBucketConnection `json:"connection"`
-	CDN           *ObjectStorageBucketCDN        `json:"cdn"`
+	UUID          string                   `json:"uuid"`
+	Name          string                   `json:"name"`
+	Status        string                   `json:"status"`
+	SuspendReason *string                  `json:"suspend_reason"`
+	WriteBlocked  bool                     `json:"write_blocked"`
+	ErrorMessage  *string                  `json:"error_message"`
+	ProjectID     *int                     `json:"project_id"`
+	Tier          ObjectStorageTierSummary `json:"tier"`
+	LocationName  string                   `json:"location_name"`
+	Region        string                   `json:"region"`
+	Endpoint      string                   `json:"endpoint"`
+	Versioning    string                   `json:"versioning"`
+	Protected     bool                     `json:"protected"`
+	SizeBytes     int64                    `json:"size_bytes"`
+	ObjectsCount  int64                    `json:"objects_count"`
+	CDNConnected  bool                     `json:"cdn_connected"`
+	Tags          map[string]string        `json:"tags"`
+	ObjectLock    ObjectStorageObjectLock  `json:"object_lock"`
+	// LockedContentKept is true when the last delete left versions protected by Object Lock
+	LockedContentKept bool                           `json:"locked_content_kept"`
+	Connection        *ObjectStorageBucketConnection `json:"connection"`
+	CDN               *ObjectStorageBucketCDN        `json:"cdn"`
 }
 
-// CreateObjectStorageBucketRequest is the body of POST /object-storage/buckets
+// ObjectStorageLockRetention is a default retention rule: a mode (governance or compliance)
+// and exactly one of Days or Years
+type ObjectStorageLockRetention struct {
+	Mode  string `json:"mode"`
+	Days  *int   `json:"days,omitempty"`
+	Years *int   `json:"years,omitempty"`
+}
+
+// ObjectStorageObjectLock is the Object Lock state of a bucket
+type ObjectStorageObjectLock struct {
+	Enabled          bool                        `json:"enabled"`
+	DefaultRetention *ObjectStorageLockRetention `json:"default_retention"`
+}
+
+// CreateObjectStorageBucketRequest is the body of POST /object-storage/buckets.
+// With ObjectLock the API requires versioning, so Versioning must be true then.
 type CreateObjectStorageBucketRequest struct {
-	Name       string            `json:"name"`
-	Tier       string            `json:"tier"`
-	ProjectID  *int              `json:"project_id,omitempty"`
-	Versioning bool              `json:"versioning"`
-	Tags       map[string]string `json:"tags,omitempty"`
+	Name                  string                      `json:"name"`
+	Tier                  string                      `json:"tier"`
+	ProjectID             *int                        `json:"project_id,omitempty"`
+	Versioning            bool                        `json:"versioning"`
+	Tags                  map[string]string           `json:"tags,omitempty"`
+	ObjectLock            bool                        `json:"object_lock,omitempty"`
+	ObjectLockDefault     *ObjectStorageLockRetention `json:"object_lock_default,omitempty"`
+	AcceptObjectLockTerms bool                        `json:"accept_object_lock_terms,omitempty"`
+}
+
+// SetObjectStorageObjectLockRequest is the body of PUT /object-storage/buckets/{uuid}/object-lock.
+// A nil DefaultRetention removes the default retention (sent as null).
+type SetObjectStorageObjectLockRequest struct {
+	DefaultRetention      *ObjectStorageLockRetention `json:"default_retention"`
+	AcceptObjectLockTerms bool                        `json:"accept_object_lock_terms"`
 }
 
 // UpdateObjectStorageBucketRequest is the body of PATCH /object-storage/buckets/{uuid}
@@ -118,6 +146,8 @@ type ObjectStorageAccessKey struct {
 	Endpoint        string                   `json:"endpoint"`
 	Status          string                   `json:"status"`
 	ExpiresAt       *string                  `json:"expires_at"`
+	// BypassGovernance: read_write keys that may delete versions under governance retention
+	BypassGovernance bool `json:"bypass_governance"`
 }
 
 // CreateObjectStorageKeyRequest is the body of POST /object-storage/keys
@@ -128,6 +158,8 @@ type CreateObjectStorageKeyRequest struct {
 	Permission  string   `json:"permission"`
 	BucketUUIDs []string `json:"bucket_uuids,omitempty"`
 	ExpiresAt   *string  `json:"expires_at,omitempty"`
+	// BypassGovernance is only accepted for read_write keys
+	BypassGovernance bool `json:"bypass_governance,omitempty"`
 }
 
 // ObjectStorageFreeTierUse is the included and used amount of one free tier allowance
