@@ -29,6 +29,7 @@ func TestProviderSchemasAreValid(t *testing.T) {
 		"cubepath_alert_channel", "cubepath_alert_rule",
 		"cubepath_ddos_protection_profile", "cubepath_ddos_firewall_rule", "cubepath_ddos_prefix_list",
 		"cubepath_network_bgp_peer", "cubepath_lb_target", "cubepath_lb_health_check", "cubepath_dns_record_health_check",
+		"cubepath_object_storage_event_destination", "cubepath_object_storage_event_rule",
 	} {
 		if _, ok := resp.ResourceSchemas[name]; !ok {
 			t.Errorf("resource %s is not registered", name)

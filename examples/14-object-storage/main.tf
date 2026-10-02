@@ -120,3 +120,24 @@ output "secret_access_key" {
 output "cdn_url" {
   value = "https://${cubepath_cdn_zone.assets.domain}/"
 }
+
+# Event notifications: every new object under uploads/ is sent to a signed webhook.
+resource "cubepath_object_storage_event_destination" "uploads" {
+  name = "uploads-hook"
+  type = "webhook"
+  url  = "https://example.com/hooks/storage"
+}
+
+resource "cubepath_object_storage_event_rule" "uploads" {
+  bucket_uuid      = cubepath_object_storage_bucket.assets.id
+  name             = "new-uploads"
+  destination_uuid = cubepath_object_storage_event_destination.uploads.id
+  events           = ["object.created"]
+  prefix           = "uploads/"
+}
+
+# Verify CubePath-Signature in the receiver with this secret (shown only at creation).
+output "events_signing_secret" {
+  value     = cubepath_object_storage_event_destination.uploads.signing_secret
+  sensitive = true
+}

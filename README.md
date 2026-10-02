@@ -104,6 +104,8 @@ resource "cubepath_vps" "web" {
 - `cubepath_availability_group` - Manage availability groups for high availability
 - `cubepath_object_storage_bucket` - Manage S3 compatible Object Storage buckets
 - `cubepath_object_storage_access_key` - Manage Object Storage access keys for S3 clients
+- `cubepath_object_storage_event_destination` - Manage destinations of Object Storage event notifications (signed webhooks, Slack or Discord channels)
+- `cubepath_object_storage_event_rule` - Send a bucket's object events (created, removed, tagged) to an event destination
 - `cubepath_managed_database` - Manage Managed Databases (MySQL, PostgreSQL, Valkey): plan, replicas, backups, configuration
 - `cubepath_managed_database_database` - Manage databases inside a Managed Database
 - `cubepath_managed_database_user` - Manage users of a Managed Database
