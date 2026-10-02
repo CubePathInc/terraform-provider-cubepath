@@ -51,13 +51,13 @@ func (r *cdnRuleResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 		Description: "Manages a CDN edge rule on CubePath Cloud.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Description: "The UUID of the rule.",
-				Computed:    true,
+				Description:   "The UUID of the rule.",
+				Computed:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"zone_uuid": schema.StringAttribute{
-				Description: "The UUID of the CDN zone.",
-				Required:    true,
+				Description:   "The UUID of the CDN zone.",
+				Required:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"name": schema.StringAttribute{
@@ -65,8 +65,8 @@ func (r *cdnRuleResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Required:    true,
 			},
 			"rule_type": schema.StringAttribute{
-				Description: "Edge rule type: cache, cache_bypass, redirect, header_request, header_response.",
-				Required:    true,
+				Description:   "Edge rule type: cache, cache_bypass, redirect, header_request, header_response.",
+				Required:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"priority": schema.Int64Attribute{

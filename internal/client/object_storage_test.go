@@ -133,3 +133,42 @@ func TestGetUsageQuery(t *testing.T) {
 		t.Fatalf("query %q", q)
 	}
 }
+
+func TestBucketTagsRequestBodies(t *testing.T) {
+	c, reqs := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusCreated)
+		}
+		_, _ = w.Write([]byte(`{"uuid":"b1","tags":{"env":"prod"}}`))
+	})
+	ctx := context.Background()
+
+	b, err := c.ObjectStorage.CreateBucket(ctx, &CreateObjectStorageBucketRequest{Name: "photos", Tier: "ia", Tags: map[string]string{"env": "prod"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tags, _ := (*reqs)[0].Body["tags"].(map[string]interface{}); tags["env"] != "prod" || b.Tags["env"] != "prod" {
+		t.Fatalf("create body %v, decoded %v", (*reqs)[0].Body, b.Tags)
+	}
+	if _, err := c.ObjectStorage.CreateBucket(ctx, &CreateObjectStorageBucketRequest{Name: "photos", Tier: "ia"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := (*reqs)[1].Body["tags"]; ok {
+		t.Fatalf("tags sent when empty: %v", (*reqs)[1].Body)
+	}
+
+	protected := true
+	if err := c.ObjectStorage.UpdateBucket(ctx, "b1", &UpdateObjectStorageBucketRequest{Protected: &protected}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := (*reqs)[2].Body["tags"]; ok {
+		t.Fatalf("tags sent when nil: %v", (*reqs)[2].Body)
+	}
+	empty := map[string]string{}
+	if err := c.ObjectStorage.UpdateBucket(ctx, "b1", &UpdateObjectStorageBucketRequest{Tags: &empty}); err != nil {
+		t.Fatal(err)
+	}
+	if tags, ok := (*reqs)[3].Body["tags"].(map[string]interface{}); !ok || len(tags) != 0 {
+		t.Fatalf("clear body %v", (*reqs)[3].Body)
+	}
+}

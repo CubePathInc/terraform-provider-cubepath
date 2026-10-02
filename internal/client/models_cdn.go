@@ -98,20 +98,20 @@ type UpdateCDNZoneRequest struct {
 
 // CreateCDNOriginRequest represents a request to create a CDN origin
 type CreateCDNOriginRequest struct {
-	Name               string  `json:"name"`
-	OriginURL          string  `json:"origin_url,omitempty"`
-	Address            string  `json:"address,omitempty"`
-	Port               *int    `json:"port,omitempty"`
-	Protocol           string  `json:"protocol,omitempty"`
-	Weight             int     `json:"weight"`
-	Priority           int     `json:"priority"`
-	IsBackup           bool    `json:"is_backup"`
-	HealthCheckEnabled bool    `json:"health_check_enabled"`
-	HealthCheckPath    string  `json:"health_check_path"`
-	VerifySSL          bool    `json:"verify_ssl"`
-	HostHeader         string  `json:"host_header,omitempty"`
-	BasePath           string  `json:"base_path,omitempty"`
-	Enabled            bool    `json:"enabled"`
+	Name               string `json:"name"`
+	OriginURL          string `json:"origin_url,omitempty"`
+	Address            string `json:"address,omitempty"`
+	Port               *int   `json:"port,omitempty"`
+	Protocol           string `json:"protocol,omitempty"`
+	Weight             int    `json:"weight"`
+	Priority           int    `json:"priority"`
+	IsBackup           bool   `json:"is_backup"`
+	HealthCheckEnabled bool   `json:"health_check_enabled"`
+	HealthCheckPath    string `json:"health_check_path"`
+	VerifySSL          bool   `json:"verify_ssl"`
+	HostHeader         string `json:"host_header,omitempty"`
+	BasePath           string `json:"base_path,omitempty"`
+	Enabled            bool   `json:"enabled"`
 }
 
 // CreateCDNBucketOriginRequest creates an origin that serves a CubePath Object Storage bucket.

@@ -21,9 +21,9 @@ import (
 )
 
 var (
-	_ resource.Resource                = &cdnOriginResource{}
-	_ resource.ResourceWithConfigure   = &cdnOriginResource{}
-	_ resource.ResourceWithImportState = &cdnOriginResource{}
+	_ resource.Resource                   = &cdnOriginResource{}
+	_ resource.ResourceWithConfigure      = &cdnOriginResource{}
+	_ resource.ResourceWithImportState    = &cdnOriginResource{}
 	_ resource.ResourceWithValidateConfig = &cdnOriginResource{}
 	_ resource.ResourceWithModifyPlan     = &cdnOriginResource{}
 )
@@ -76,13 +76,13 @@ func (r *cdnOriginResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 		Description: "Manages a CDN origin server on CubePath Cloud.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Description: "The UUID of the origin.",
-				Computed:    true,
+				Description:   "The UUID of the origin.",
+				Computed:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"zone_uuid": schema.StringAttribute{
-				Description: "The UUID of the CDN zone.",
-				Required:    true,
+				Description:   "The UUID of the CDN zone.",
+				Required:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"name": schema.StringAttribute{
@@ -171,7 +171,7 @@ func (r *cdnOriginResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 					"from the bucket, so only name, weight, priority and is_backup may be set next to it. " +
 					"A bucket can be served by one origin at a time. Deleting the origin stops serving the bucket. " +
 					"Requires the object_storage:write scope. Changing it forces a new origin.",
-				Optional: true,
+				Optional:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 		},

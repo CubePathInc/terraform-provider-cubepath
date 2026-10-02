@@ -30,14 +30,14 @@ type networkResource struct {
 }
 
 type networkResourceModel struct {
-	ID       types.String `tfsdk:"id"`
-	Name     types.String `tfsdk:"name"`
-	Label    types.String `tfsdk:"label"`
-	ProjectID types.Int64 `tfsdk:"project_id"`
-	Location types.String `tfsdk:"location"`
-	IPRange  types.String `tfsdk:"ip_range"`
-	Prefix   types.Int64  `tfsdk:"prefix"`
-	CIDR     types.String `tfsdk:"cidr"`
+	ID        types.String `tfsdk:"id"`
+	Name      types.String `tfsdk:"name"`
+	Label     types.String `tfsdk:"label"`
+	ProjectID types.Int64  `tfsdk:"project_id"`
+	Location  types.String `tfsdk:"location"`
+	IPRange   types.String `tfsdk:"ip_range"`
+	Prefix    types.Int64  `tfsdk:"prefix"`
+	CIDR      types.String `tfsdk:"cidr"`
 	CreatedAt types.String `tfsdk:"created_at"`
 }
 

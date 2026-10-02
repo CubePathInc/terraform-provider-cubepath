@@ -24,8 +24,8 @@ type kubernetesVersionsDataSource struct {
 }
 
 type kubernetesVersionsDataSourceModel struct {
-	ID       types.String              `tfsdk:"id"`
-	Versions []kubernetesVersionModel  `tfsdk:"versions"`
+	ID       types.String             `tfsdk:"id"`
+	Versions []kubernetesVersionModel `tfsdk:"versions"`
 }
 
 type kubernetesVersionModel struct {

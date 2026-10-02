@@ -119,21 +119,21 @@ type FloatingIP struct {
 
 // Baremetal represents a baremetal server
 type Baremetal struct {
-	ID               int             `json:"id"`
-	Hostname         string          `json:"hostname"`
-	Label            string          `json:"label"`
-	ProjectID        int             `json:"project_id"`
-	Status           string          `json:"status"`
-	User             string          `json:"user"`
-	OS               *OSInfo         `json:"os"`
-	Location         Location        `json:"location"`
-	BaremetalModel   BaremetalModel  `json:"baremetal_model"`
-	FloatingIPs      []FloatingIP    `json:"floating_ips"`
-	MonitoringEnable bool            `json:"monitoring_enable"`
-	Protected        bool            `json:"protected"`
-	SSHKeys          []SSHKey        `json:"ssh_keys"`
-	Network          *NetworkInfo    `json:"network,omitempty"`
-	CreatedAt        time.Time       `json:"created_at"`
+	ID               int            `json:"id"`
+	Hostname         string         `json:"hostname"`
+	Label            string         `json:"label"`
+	ProjectID        int            `json:"project_id"`
+	Status           string         `json:"status"`
+	User             string         `json:"user"`
+	OS               *OSInfo        `json:"os"`
+	Location         Location       `json:"location"`
+	BaremetalModel   BaremetalModel `json:"baremetal_model"`
+	FloatingIPs      []FloatingIP   `json:"floating_ips"`
+	MonitoringEnable bool           `json:"monitoring_enable"`
+	Protected        bool           `json:"protected"`
+	SSHKeys          []SSHKey       `json:"ssh_keys"`
+	Network          *NetworkInfo   `json:"network,omitempty"`
+	CreatedAt        time.Time      `json:"created_at"`
 }
 
 // BaremetalModel represents a baremetal server model
@@ -141,7 +141,7 @@ type BaremetalModel struct {
 	ID          int    `json:"id"`
 	ModelName   string `json:"model_name"`
 	CPU         string `json:"cpu"`
-	RAM         int    `json:"ram"`          // GB
+	RAM         int    `json:"ram"` // GB
 	StorageType string `json:"storage_type"`
 	DiskCount   int    `json:"disk_count"`
 	DiskSize    string `json:"disk_size"` // String format like "2 x 4TB"
@@ -201,21 +201,21 @@ type Subnet struct {
 
 // CreateVPSRequest represents a request to create a VPS
 type CreateVPSRequest struct {
-	Name                  string   `json:"name"`
-	PlanName              string   `json:"plan_name"`
-	TemplateName          string   `json:"template_name"`
-	LocationName          string   `json:"location_name"`
-	Label                 string   `json:"label"`
-	NetworkID             *int     `json:"network_id,omitempty"`
-	SSHKeyIDs             []int    `json:"ssh_key_ids,omitempty"`
-	User                  string   `json:"user,omitempty"`
-	Password              string   `json:"password,omitempty"`
-	IPv4                  *bool    `json:"ipv4,omitempty"`
-	IPv6                  *bool    `json:"ipv6,omitempty"`
-	EnableBackups         *bool    `json:"enable_backups,omitempty"`
-	CustomCloudInit       *string  `json:"custom_cloudinit,omitempty"`
-	FirewallGroupIDs      []int    `json:"firewall_group_ids,omitempty"`
-	AvailabilityGroupUUID *string  `json:"availability_group_uuid,omitempty"`
+	Name                  string  `json:"name"`
+	PlanName              string  `json:"plan_name"`
+	TemplateName          string  `json:"template_name"`
+	LocationName          string  `json:"location_name"`
+	Label                 string  `json:"label"`
+	NetworkID             *int    `json:"network_id,omitempty"`
+	SSHKeyIDs             []int   `json:"ssh_key_ids,omitempty"`
+	User                  string  `json:"user,omitempty"`
+	Password              string  `json:"password,omitempty"`
+	IPv4                  *bool   `json:"ipv4,omitempty"`
+	IPv6                  *bool   `json:"ipv6,omitempty"`
+	EnableBackups         *bool   `json:"enable_backups,omitempty"`
+	CustomCloudInit       *string `json:"custom_cloudinit,omitempty"`
+	FirewallGroupIDs      []int   `json:"firewall_group_ids,omitempty"`
+	AvailabilityGroupUUID *string `json:"availability_group_uuid,omitempty"`
 }
 
 // CreateNetworkRequest represents a request to create a network
@@ -242,15 +242,15 @@ type CreateSSHKeyRequest struct {
 
 // CreateBaremetalRequest represents a request to deploy a baremetal server
 type CreateBaremetalRequest struct {
-	ModelName      string   `json:"model_name"`
-	LocationName   string   `json:"location_name"`
-	Hostname       string   `json:"hostname"`
-	Label          string   `json:"label,omitempty"`
-	User           string   `json:"user,omitempty"`
-	Password       string   `json:"password"`
-	SSHKeyIDs      []int    `json:"ssh_key_ids,omitempty"`
-	OSName         string   `json:"os_name,omitempty"`
-	DiskLayoutName string   `json:"disk_layout_name,omitempty"`
+	ModelName      string `json:"model_name"`
+	LocationName   string `json:"location_name"`
+	Hostname       string `json:"hostname"`
+	Label          string `json:"label,omitempty"`
+	User           string `json:"user,omitempty"`
+	Password       string `json:"password"`
+	SSHKeyIDs      []int  `json:"ssh_key_ids,omitempty"`
+	OSName         string `json:"os_name,omitempty"`
+	DiskLayoutName string `json:"disk_layout_name,omitempty"`
 }
 
 // UpdateBaremetalRequest represents a request to update a baremetal server
@@ -261,12 +261,12 @@ type UpdateBaremetalRequest struct {
 
 // ReinstallBaremetalRequest represents a request to reinstall a baremetal OS
 type ReinstallBaremetalRequest struct {
-	OSName         string   `json:"os_name"`
-	DiskLayoutName string   `json:"disk_layout_name,omitempty"`
-	User           string   `json:"user,omitempty"`
-	Password       string   `json:"password"`
-	Hostname       string   `json:"hostname,omitempty"`
-	SSHKeyIDs      []int    `json:"ssh_key_ids,omitempty"`
+	OSName         string `json:"os_name"`
+	DiskLayoutName string `json:"disk_layout_name,omitempty"`
+	User           string `json:"user,omitempty"`
+	Password       string `json:"password"`
+	Hostname       string `json:"hostname,omitempty"`
+	SSHKeyIDs      []int  `json:"ssh_key_ids,omitempty"`
 }
 
 // TaskResponse represents a response with a task ID

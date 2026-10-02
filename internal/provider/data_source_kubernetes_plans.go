@@ -24,9 +24,9 @@ type kubernetesPlansDataSource struct {
 }
 
 type kubernetesPlansDataSourceModel struct {
-	ID      types.String           `tfsdk:"id"`
-	Version types.String           `tfsdk:"version"`
-	Plans   []kubernetesPlanModel  `tfsdk:"plans"`
+	ID      types.String          `tfsdk:"id"`
+	Version types.String          `tfsdk:"version"`
+	Plans   []kubernetesPlanModel `tfsdk:"plans"`
 }
 
 type kubernetesPlanModel struct {

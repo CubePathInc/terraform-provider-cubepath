@@ -24,8 +24,8 @@ type dnsZonesDataSource struct {
 }
 
 type dnsZonesDataSourceModel struct {
-	ID    types.String     `tfsdk:"id"`
-	Zones []dnsZoneModel   `tfsdk:"zones"`
+	ID    types.String   `tfsdk:"id"`
+	Zones []dnsZoneModel `tfsdk:"zones"`
 }
 
 type dnsZoneModel struct {

@@ -20,6 +20,14 @@ resource "cubepath_object_storage_bucket" "assets" {
   tier       = "infrequent_access"
   versioning = "enabled"
   protected  = true # set to false before destroying it
+
+  # Labels for organizing and filtering buckets, changed in place. They are not
+  # visible through S3 (aws_s3_bucket_tagging gets 403); object tags are, for
+  # example aws_s3_object with tags.
+  tags = {
+    env  = "prod"
+    team = "web"
+  }
 }
 
 # A read only key limited to that bucket, for an application or a backup job

@@ -24,9 +24,9 @@ type availabilityGroupsDataSource struct {
 }
 
 type availabilityGroupsDataSourceModel struct {
-	ID        types.String                    `tfsdk:"id"`
-	ProjectID types.Int64                     `tfsdk:"project_id"`
-	Groups    []availabilityGroupItemModel    `tfsdk:"groups"`
+	ID        types.String                 `tfsdk:"id"`
+	ProjectID types.Int64                  `tfsdk:"project_id"`
+	Groups    []availabilityGroupItemModel `tfsdk:"groups"`
 }
 
 type availabilityGroupItemModel struct {

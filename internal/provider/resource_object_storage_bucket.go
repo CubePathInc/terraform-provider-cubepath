@@ -4,16 +4,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf16"
 
 	"github.com/cubepath/terraform-provider-cubepath/internal/client"
 	"github.com/cubepath/terraform-provider-cubepath/internal/utils"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -53,6 +59,7 @@ type objectStorageBucketResourceModel struct {
 	Region       types.String `tfsdk:"region"`
 	Endpoint     types.String `tfsdk:"endpoint"`
 	LocationName types.String `tfsdk:"location_name"`
+	Tags         types.Map    `tfsdk:"tags"`
 }
 
 func (r *objectStorageBucketResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -106,6 +113,16 @@ func (r *objectStorageBucketResource) Schema(_ context.Context, _ resource.Schem
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
 			},
+			"tags": schema.MapAttribute{
+				Description: "Labels to organize and filter buckets, as key = value. At most 50; keys 1 to 128 and values " +
+					"0 to 256 characters of letters, numbers, spaces and _ . : / = + - @. Keys cannot contain =, start or end " +
+					"with a space, or start with aws:, cp: or cubepath:. Changed in place; tags edited outside Terraform show " +
+					"as drift. Bucket tags are not visible through S3 (GetBucketTagging and PutBucketTagging answer 403).",
+				ElementType: types.StringType,
+				Optional:    true,
+				Computed:    true,
+				Default:     mapdefault.StaticValue(types.MapValueMust(types.StringType, map[string]attr.Value{})),
+			},
 			"force_destroy": schema.BoolAttribute{
 				Description: "Delete every object, version and unfinished upload when the bucket is destroyed. " +
 					"Without it, destroying a bucket that is not empty fails.",
@@ -150,6 +167,25 @@ func (r *objectStorageBucketResource) Configure(_ context.Context, req resource.
 }
 
 func (r *objectStorageBucketResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var tags types.Map
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("tags"), &tags)...)
+	if !tags.IsNull() && !tags.IsUnknown() {
+		elems := make(map[string]types.String, len(tags.Elements()))
+		resp.Diagnostics.Append(tags.ElementsAs(ctx, &elems, false)...)
+		known := make(map[string]*string, len(elems))
+		for k, v := range elems {
+			if v.IsUnknown() || v.IsNull() {
+				known[k] = nil
+				continue
+			}
+			s := v.ValueString()
+			known[k] = &s
+		}
+		for _, msg := range validateBucketTags(known) {
+			resp.Diagnostics.AddAttributeError(path.Root("tags"), "Invalid tags", msg)
+		}
+	}
+
 	var versioning types.String
 	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("versioning"), &versioning)...)
 	if versioning.IsNull() || versioning.IsUnknown() {
@@ -161,6 +197,80 @@ func (r *objectStorageBucketResource) ValidateConfig(ctx context.Context, req re
 		resp.Diagnostics.AddAttributeError(path.Root("versioning"), "Invalid versioning",
 			"versioning must be off, enabled or suspended.")
 	}
+}
+
+// Bucket tag rules, the same the API applies.
+const (
+	bucketTagsMax   = 50
+	bucketTagKeyMax = 128 // UTF-16 code units
+	bucketTagValMax = 256 // UTF-16 code units
+)
+
+var reservedTagPrefixes = []string{"aws:", "cp:", "cubepath:"}
+
+// validTagChars reports whether s only has letters, numbers, spaces and _ . : / = + - @.
+func validTagChars(s string) bool {
+	for _, c := range s {
+		if unicode.IsLetter(c) || unicode.IsNumber(c) || unicode.In(c, unicode.Z) || strings.ContainsRune("_.:/=+-@", c) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+// validateBucketTags returns one message per broken rule. A nil value is unknown at plan time
+// and only its key is checked.
+func validateBucketTags(tags map[string]*string) []string {
+	var errs []string
+	if len(tags) > bucketTagsMax {
+		errs = append(errs, fmt.Sprintf("A bucket can have at most %d tags, got %d.", bucketTagsMax, len(tags)))
+	}
+	for k, v := range tags {
+		switch n := len(utf16.Encode([]rune(k))); {
+		case n == 0:
+			errs = append(errs, "Tag keys cannot be empty.")
+			continue
+		case n > bucketTagKeyMax:
+			errs = append(errs, fmt.Sprintf("Tag key %q is longer than %d characters.", k, bucketTagKeyMax))
+		}
+		if !validTagChars(k) {
+			errs = append(errs, fmt.Sprintf("Tag key %q has characters other than letters, numbers, spaces and _ . : / = + - @.", k))
+		}
+		if strings.Contains(k, "=") {
+			errs = append(errs, fmt.Sprintf("Tag key %q cannot contain =.", k))
+		}
+		if k != strings.TrimSpace(k) {
+			errs = append(errs, fmt.Sprintf("Tag key %q cannot start or end with a space.", k))
+		}
+		lower := strings.ToLower(k)
+		for _, p := range reservedTagPrefixes {
+			if strings.HasPrefix(lower, p) {
+				errs = append(errs, fmt.Sprintf("Tag key %q uses the reserved prefix %s.", k, p))
+			}
+		}
+		if v == nil {
+			continue
+		}
+		if len(utf16.Encode([]rune(*v))) > bucketTagValMax {
+			errs = append(errs, fmt.Sprintf("The value of tag %q is longer than %d characters.", k, bucketTagValMax))
+		}
+		if !validTagChars(*v) {
+			errs = append(errs, fmt.Sprintf("The value of tag %q has characters other than letters, numbers, spaces and _ . : / = + - @.", k))
+		}
+	}
+	sort.Strings(errs)
+	return errs
+}
+
+// tagsFromModel reads a known tags map from the plan.
+func tagsFromModel(ctx context.Context, m types.Map, diags *diag.Diagnostics) map[string]string {
+	tags := map[string]string{}
+	if m.IsNull() || m.IsUnknown() {
+		return tags
+	}
+	diags.Append(m.ElementsAs(ctx, &tags, false)...)
+	return tags
 }
 
 func (r *objectStorageBucketResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -185,6 +295,12 @@ func (r *objectStorageBucketResource) Create(ctx context.Context, req resource.C
 	if !plan.ProjectID.IsNull() && !plan.ProjectID.IsUnknown() {
 		pid := int(plan.ProjectID.ValueInt64())
 		createReq.ProjectID = &pid
+	}
+	if tags := tagsFromModel(ctx, plan.Tags, &resp.Diagnostics); len(tags) > 0 {
+		createReq.Tags = tags
+	}
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
 	created, err := r.client.ObjectStorage.CreateBucket(ctx, createReq)
@@ -256,6 +372,14 @@ func (r *objectStorageBucketResource) Update(ctx context.Context, req resource.U
 	if !plan.Protected.Equal(state.Protected) {
 		v := plan.Protected.ValueBool()
 		updateReq.Protected = &v
+		changed = true
+	}
+	if !plan.Tags.IsUnknown() && !plan.Tags.Equal(state.Tags) {
+		tags := tagsFromModel(ctx, plan.Tags, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		updateReq.Tags = &tags
 		changed = true
 	}
 
@@ -405,4 +529,14 @@ func (r *objectStorageBucketResource) mapToState(state *objectStorageBucketResou
 	state.Region = types.StringValue(bucket.Region)
 	state.Endpoint = types.StringValue(bucket.Endpoint)
 	state.LocationName = types.StringValue(bucket.LocationName)
+	state.Tags = tagsToMap(bucket.Tags)
+}
+
+// tagsToMap converts API tags to a Terraform map; no tags is an empty map, never null.
+func tagsToMap(tags map[string]string) types.Map {
+	elems := make(map[string]attr.Value, len(tags))
+	for k, v := range tags {
+		elems[k] = types.StringValue(v)
+	}
+	return types.MapValueMust(types.StringType, elems)
 }

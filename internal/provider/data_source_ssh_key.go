@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cubepath/terraform-provider-cubepath/internal/client"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/cubepath/terraform-provider-cubepath/internal/client"
 )
 
 var (

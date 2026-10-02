@@ -76,22 +76,26 @@ type ObjectStorageBucket struct {
 	SizeBytes     int64                          `json:"size_bytes"`
 	ObjectsCount  int64                          `json:"objects_count"`
 	CDNConnected  bool                           `json:"cdn_connected"`
+	Tags          map[string]string              `json:"tags"`
 	Connection    *ObjectStorageBucketConnection `json:"connection"`
 	CDN           *ObjectStorageBucketCDN        `json:"cdn"`
 }
 
 // CreateObjectStorageBucketRequest is the body of POST /object-storage/buckets
 type CreateObjectStorageBucketRequest struct {
-	Name       string `json:"name"`
-	Tier       string `json:"tier"`
-	ProjectID  *int   `json:"project_id,omitempty"`
-	Versioning bool   `json:"versioning"`
+	Name       string            `json:"name"`
+	Tier       string            `json:"tier"`
+	ProjectID  *int              `json:"project_id,omitempty"`
+	Versioning bool              `json:"versioning"`
+	Tags       map[string]string `json:"tags,omitempty"`
 }
 
 // UpdateObjectStorageBucketRequest is the body of PATCH /object-storage/buckets/{uuid}
+// Tags replaces every tag of the bucket when not nil (a pointer to an empty map removes them).
 type UpdateObjectStorageBucketRequest struct {
-	Versioning *string `json:"versioning,omitempty"`
-	Protected  *bool   `json:"protected,omitempty"`
+	Versioning *string            `json:"versioning,omitempty"`
+	Protected  *bool              `json:"protected,omitempty"`
+	Tags       *map[string]string `json:"tags,omitempty"`
 }
 
 // ObjectStorageBucketRef is a bucket reference inside an access key's scope

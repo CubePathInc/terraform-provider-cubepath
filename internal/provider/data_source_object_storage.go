@@ -193,6 +193,7 @@ type objectStorageBucketDataSourceModel struct {
 	CDNZoneUUID    types.String `tfsdk:"cdn_zone_uuid"`
 	CDNOriginUUID  types.String `tfsdk:"cdn_origin_uuid"`
 	CDNDomain      types.String `tfsdk:"cdn_domain"`
+	Tags           types.Map    `tfsdk:"tags"`
 }
 
 func (d *objectStorageBucketDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -234,6 +235,7 @@ func (d *objectStorageBucketDataSource) Schema(_ context.Context, _ datasource.S
 			"cdn_zone_uuid":    str("UUID of the CDN zone serving the bucket, if any."),
 			"cdn_origin_uuid":  str("UUID of the CDN origin serving the bucket, if any."),
 			"cdn_domain":       str("CDN domain serving the bucket, if any."),
+			"tags":             schema.MapAttribute{Description: "Bucket tags as key = value (empty when none).", ElementType: types.StringType, Computed: true},
 		},
 	}
 }
@@ -307,6 +309,7 @@ func (d *objectStorageBucketDataSource) Read(ctx context.Context, req datasource
 		CDNZoneUUID:   types.StringNull(),
 		CDNOriginUUID: types.StringNull(),
 		CDNDomain:     types.StringNull(),
+		Tags:          tagsToMap(bucket.Tags),
 	}
 	state.VirtualHostURL = types.StringNull()
 	if bucket.ProjectID != nil {

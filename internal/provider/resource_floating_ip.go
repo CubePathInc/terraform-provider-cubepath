@@ -29,14 +29,14 @@ type floatingIPResource struct {
 }
 
 type floatingIPResourceModel struct {
-	ID           types.String `tfsdk:"id"`
-	Address      types.String `tfsdk:"address"`
-	IPType       types.String `tfsdk:"ip_type"`
-	LocationName types.String `tfsdk:"location_name"`
-	ReverseDNS   types.String `tfsdk:"reverse_dns"`
-	AssignVPSID  types.Int64  `tfsdk:"assign_vps_id"`
-	AssignBaremetalID types.Int64 `tfsdk:"assign_baremetal_id"`
-	Status       types.String `tfsdk:"status"`
+	ID                types.String `tfsdk:"id"`
+	Address           types.String `tfsdk:"address"`
+	IPType            types.String `tfsdk:"ip_type"`
+	LocationName      types.String `tfsdk:"location_name"`
+	ReverseDNS        types.String `tfsdk:"reverse_dns"`
+	AssignVPSID       types.Int64  `tfsdk:"assign_vps_id"`
+	AssignBaremetalID types.Int64  `tfsdk:"assign_baremetal_id"`
+	Status            types.String `tfsdk:"status"`
 }
 
 func (r *floatingIPResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {

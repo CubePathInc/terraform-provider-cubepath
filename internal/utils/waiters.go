@@ -12,12 +12,12 @@ type StateRefreshFunc func() (result interface{}, state string, err error)
 
 // StateChangeConf is the configuration for waiting on a state change
 type StateChangeConf struct {
-	Pending      []string          // States that are "in progress"
-	Target       []string          // States that are "complete"
-	Refresh      StateRefreshFunc  // Function to refresh state
-	Timeout      time.Duration     // Maximum time to wait
-	PollInterval time.Duration     // Time between polls
-	MinTimeout   time.Duration     // Minimum timeout for the first poll
+	Pending      []string         // States that are "in progress"
+	Target       []string         // States that are "complete"
+	Refresh      StateRefreshFunc // Function to refresh state
+	Timeout      time.Duration    // Maximum time to wait
+	PollInterval time.Duration    // Time between polls
+	MinTimeout   time.Duration    // Minimum timeout for the first poll
 }
 
 // WaitForState waits for the state change to complete

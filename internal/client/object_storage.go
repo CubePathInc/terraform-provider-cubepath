@@ -53,7 +53,7 @@ func (s *ObjectStorageService) CreateBucket(ctx context.Context, req *CreateObje
 	return &result, nil
 }
 
-// UpdateBucket changes versioning or deletion protection
+// UpdateBucket changes versioning, deletion protection or tags
 func (s *ObjectStorageService) UpdateBucket(ctx context.Context, uuid string, req *UpdateObjectStorageBucketRequest) error {
 	return s.client.Patch(ctx, "/object-storage/buckets/"+url.PathEscape(uuid), req, nil)
 }

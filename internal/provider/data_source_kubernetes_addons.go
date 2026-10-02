@@ -24,8 +24,8 @@ type kubernetesAddonsDataSource struct {
 }
 
 type kubernetesAddonsDataSourceModel struct {
-	ID     types.String            `tfsdk:"id"`
-	Addons []kubernetesAddonModel  `tfsdk:"addons"`
+	ID     types.String           `tfsdk:"id"`
+	Addons []kubernetesAddonModel `tfsdk:"addons"`
 }
 
 type kubernetesAddonModel struct {

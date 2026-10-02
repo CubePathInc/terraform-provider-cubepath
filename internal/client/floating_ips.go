@@ -51,9 +51,9 @@ func (f *FloatingIPs) GetByAddress(ctx context.Context, address string) (*Floati
 
 // acquireFloatingIPResponse represents the API response when acquiring a floating IP
 type acquireFloatingIPResponse struct {
-	Detail      string `json:"detail"`
-	IPAddress   string `json:"ip_address"`
-	FloatingIPID int   `json:"floating_ip_id"`
+	Detail       string `json:"detail"`
+	IPAddress    string `json:"ip_address"`
+	FloatingIPID int    `json:"floating_ip_id"`
 }
 
 // Acquire acquires a new floating IP from the pool

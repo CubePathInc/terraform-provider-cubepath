@@ -51,13 +51,13 @@ func (r *cdnWAFRuleResource) Schema(_ context.Context, _ resource.SchemaRequest,
 		Description: "Manages a CDN WAF rule on CubePath Cloud.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Description: "The UUID of the WAF rule.",
-				Computed:    true,
+				Description:   "The UUID of the WAF rule.",
+				Computed:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"zone_uuid": schema.StringAttribute{
-				Description: "The UUID of the CDN zone.",
-				Required:    true,
+				Description:   "The UUID of the CDN zone.",
+				Required:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"name": schema.StringAttribute{
@@ -65,8 +65,8 @@ func (r *cdnWAFRuleResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Required:    true,
 			},
 			"rule_type": schema.StringAttribute{
-				Description: "WAF rule type: firewall_ip, firewall_country, firewall_ua, rate_limit, js_challenge, limit_download_speed, limit_requests, limit_connections, limit_bandwidth.",
-				Required:    true,
+				Description:   "WAF rule type: firewall_ip, firewall_country, firewall_ua, rate_limit, js_challenge, limit_download_speed, limit_requests, limit_connections, limit_bandwidth.",
+				Required:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"priority": schema.Int64Attribute{

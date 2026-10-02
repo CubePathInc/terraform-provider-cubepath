@@ -35,6 +35,7 @@ Fetches an Object Storage bucket by UUID or by name.
 - `region` (String) S3 region.
 - `size_bytes` (Number) Stored size in bytes (every version), refreshed every 15 minutes.
 - `status` (String) Bucket status.
+- `tags` (Map of String) Bucket tags as key = value (empty when none).
 - `tier_slug` (String) Tier slug.
 - `tier_uuid` (String) Tier UUID.
 - `versioning` (String) Versioning: off, enabled or suspended.
