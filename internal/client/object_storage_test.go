@@ -88,11 +88,84 @@ func TestDeleteBucketPassesForce(t *testing.T) {
 		_, _ = w.Write([]byte(`{"detail":"Bucket deletion started"}`))
 	})
 
-	if err := c.ObjectStorage.DeleteBucket(context.Background(), "b1", true); err != nil {
+	if err := c.ObjectStorage.DeleteBucket(context.Background(), "b1", true, false); err != nil {
 		t.Fatal(err)
 	}
 	if req := (*reqs)[0]; req.Method != http.MethodDelete || req.Path != "/object-storage/buckets/b1" || req.Query != "force=true" {
 		t.Fatalf("got %+v", req)
+	}
+	if err := c.ObjectStorage.DeleteBucket(context.Background(), "b1", true, true); err != nil {
+		t.Fatal(err)
+	}
+	if q := (*reqs)[1].Query; q != "force=true&bypass_governance=true" {
+		t.Fatalf("query %q", q)
+	}
+	// bypass_governance is only valid together with force
+	if err := c.ObjectStorage.DeleteBucket(context.Background(), "b1", false, true); err != nil {
+		t.Fatal(err)
+	}
+	if q := (*reqs)[2].Query; q != "force=false" {
+		t.Fatalf("query %q", q)
+	}
+}
+
+func TestBucketObjectLockBodies(t *testing.T) {
+	c, reqs := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"uuid":"b1","object_lock":{"enabled":true,"default_retention":{"mode":"governance","days":30,"years":null}}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"detail":"Bucket updated"}`))
+	})
+	ctx := context.Background()
+
+	days := 30
+	b, err := c.ObjectStorage.CreateBucket(ctx, &CreateObjectStorageBucketRequest{
+		Name: "backups", Tier: "ia", Versioning: true, ObjectLock: true, AcceptObjectLockTerms: true,
+		ObjectLockDefault: &ObjectStorageLockRetention{Mode: "governance", Days: &days},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !b.ObjectLock.Enabled || b.ObjectLock.DefaultRetention == nil || *b.ObjectLock.DefaultRetention.Days != 30 || b.ObjectLock.DefaultRetention.Years != nil {
+		t.Fatalf("decoded %+v", b.ObjectLock)
+	}
+	body := (*reqs)[0].Body
+	rule, _ := body["object_lock_default"].(map[string]interface{})
+	if body["object_lock"] != true || body["accept_object_lock_terms"] != true || body["versioning"] != true || rule["mode"] != "governance" || rule["days"] != float64(30) {
+		t.Fatalf("create body %v", body)
+	}
+	if _, ok := rule["years"]; ok {
+		t.Fatalf("years sent when unset: %v", rule)
+	}
+
+	if _, err := c.ObjectStorage.CreateBucket(ctx, &CreateObjectStorageBucketRequest{Name: "photos", Tier: "ia"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"object_lock", "object_lock_default", "accept_object_lock_terms"} {
+		if _, ok := (*reqs)[1].Body[k]; ok {
+			t.Errorf("%s sent without Object Lock: %v", k, (*reqs)[1].Body)
+		}
+	}
+
+	years := 1
+	if err := c.ObjectStorage.SetBucketObjectLock(ctx, "b1", &SetObjectStorageObjectLockRequest{
+		DefaultRetention: &ObjectStorageLockRetention{Mode: "compliance", Years: &years}, AcceptObjectLockTerms: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	put := (*reqs)[2]
+	rule, _ = put.Body["default_retention"].(map[string]interface{})
+	if put.Method != http.MethodPut || put.Path != "/object-storage/buckets/b1/object-lock" || rule["years"] != float64(1) || put.Body["accept_object_lock_terms"] != true {
+		t.Fatalf("got %+v", put)
+	}
+
+	if err := c.ObjectStorage.SetBucketObjectLock(ctx, "b1", &SetObjectStorageObjectLockRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := (*reqs)[3].Body["default_retention"]; !ok || v != nil {
+		t.Fatalf("removing the rule must send null: %v", (*reqs)[3].Body)
 	}
 }
 
@@ -109,7 +182,7 @@ func TestCreateKeyOmitsEmptyOptionalFields(t *testing.T) {
 		t.Fatalf("got %+v, %v", key, err)
 	}
 	body := (*reqs)[0].Body
-	for _, k := range []string{"bucket_uuids", "expires_at", "project_id"} {
+	for _, k := range []string{"bucket_uuids", "expires_at", "project_id", "bypass_governance"} {
 		if _, ok := body[k]; ok {
 			t.Errorf("%s must be omitted when unset: %v", k, body)
 		}

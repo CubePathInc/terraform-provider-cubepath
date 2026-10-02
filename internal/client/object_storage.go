@@ -58,9 +58,19 @@ func (s *ObjectStorageService) UpdateBucket(ctx context.Context, uuid string, re
 	return s.client.Patch(ctx, "/object-storage/buckets/"+url.PathEscape(uuid), req, nil)
 }
 
-// DeleteBucket starts the deletion of a bucket. With force its content is purged first.
-func (s *ObjectStorageService) DeleteBucket(ctx context.Context, uuid string, force bool) error {
-	return s.client.Delete(ctx, fmt.Sprintf("/object-storage/buckets/%s?force=%s", url.PathEscape(uuid), strconv.FormatBool(force)))
+// SetBucketObjectLock changes or removes the default retention of a bucket with Object Lock
+func (s *ObjectStorageService) SetBucketObjectLock(ctx context.Context, uuid string, req *SetObjectStorageObjectLockRequest) error {
+	return s.client.Put(ctx, "/object-storage/buckets/"+url.PathEscape(uuid)+"/object-lock", req, nil)
+}
+
+// DeleteBucket starts the deletion of a bucket. With force its content is purged first;
+// bypassGovernance (only with force) also deletes versions under governance retention.
+func (s *ObjectStorageService) DeleteBucket(ctx context.Context, uuid string, force, bypassGovernance bool) error {
+	path := fmt.Sprintf("/object-storage/buckets/%s?force=%s", url.PathEscape(uuid), strconv.FormatBool(force))
+	if force && bypassGovernance {
+		path += "&bypass_governance=true"
+	}
+	return s.client.Delete(ctx, path)
 }
 
 // ListKeys retrieves the organization's access keys (never secrets)

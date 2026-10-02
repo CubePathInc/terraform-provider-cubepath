@@ -62,6 +62,32 @@ resource "cubepath_object_storage_access_key" "app" {
   buckets    = [cubepath_object_storage_bucket.assets.id]
 }
 
+# Immutable backups: a bucket with Object Lock (only possible at creation, needs
+# versioning). Every new version is kept for 30 days in governance mode.
+resource "cubepath_object_storage_bucket" "backups" {
+  name                     = "my-company-backups"
+  tier                     = "infrequent_access"
+  versioning               = "enabled"
+  object_lock_enabled      = true
+  accept_object_lock_terms = true
+  # Created protected; set protected = false before destroying it. Versions still
+  # under retention are kept (locked_content_kept) and keep being billed.
+
+  object_lock_default_retention = {
+    mode = "governance" # or "compliance" if support enabled it for your organization
+    days = 30
+  }
+}
+
+# Key for the backup tool (Veeam, Kopia). bypass_governance lets it remove
+# governance versions with the x-amz-bypass-governance-retention header.
+resource "cubepath_object_storage_access_key" "backups" {
+  name              = "backup-tool"
+  tier              = "infrequent_access"
+  buckets           = [cubepath_object_storage_bucket.backups.id]
+  bypass_governance = true
+}
+
 # Buckets are never public: serve one through the CDN by adding it as an origin
 resource "cubepath_cdn_zone" "assets" {
   name      = "my-company-assets"

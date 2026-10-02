@@ -194,6 +194,10 @@ type objectStorageBucketDataSourceModel struct {
 	CDNOriginUUID  types.String `tfsdk:"cdn_origin_uuid"`
 	CDNDomain      types.String `tfsdk:"cdn_domain"`
 	Tags           types.Map    `tfsdk:"tags"`
+
+	ObjectLockEnabled          types.Bool   `tfsdk:"object_lock_enabled"`
+	ObjectLockDefaultRetention types.Object `tfsdk:"object_lock_default_retention"`
+	LockedContentKept          types.Bool   `tfsdk:"locked_content_kept"`
 }
 
 func (d *objectStorageBucketDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -217,25 +221,39 @@ func (d *objectStorageBucketDataSource) Schema(_ context.Context, _ datasource.S
 				Optional:    true,
 				Computed:    true,
 			},
-			"status":           str("Bucket status."),
-			"project_id":       schema.Int64Attribute{Description: "Project ID.", Computed: true},
-			"tier_slug":        str("Tier slug."),
-			"tier_uuid":        str("Tier UUID."),
-			"location_name":    str("Location of the storage cluster."),
-			"region":           str("S3 region."),
-			"endpoint":         str("S3 endpoint."),
-			"path_style_url":   str("Path-style URL of the bucket (endpoint/bucket)."),
-			"virtual_host_url": str("Virtual-hosted URL of the bucket (bucket.endpoint host)."),
-			"versioning":       str("Versioning: off, enabled or suspended."),
-			"protected":        schema.BoolAttribute{Description: "Deletion protection.", Computed: true},
-			"write_blocked":    schema.BoolAttribute{Description: "True while uploads to the bucket are paused.", Computed: true},
-			"size_bytes":       schema.Int64Attribute{Description: "Stored size in bytes (every version), refreshed every 15 minutes.", Computed: true},
-			"objects_count":    schema.Int64Attribute{Description: "Number of objects, refreshed every 15 minutes.", Computed: true},
-			"cdn_connected":    schema.BoolAttribute{Description: "True while a CDN origin serves the bucket.", Computed: true},
-			"cdn_zone_uuid":    str("UUID of the CDN zone serving the bucket, if any."),
-			"cdn_origin_uuid":  str("UUID of the CDN origin serving the bucket, if any."),
-			"cdn_domain":       str("CDN domain serving the bucket, if any."),
-			"tags":             schema.MapAttribute{Description: "Bucket tags as key = value (empty when none).", ElementType: types.StringType, Computed: true},
+			"status":              str("Bucket status."),
+			"project_id":          schema.Int64Attribute{Description: "Project ID.", Computed: true},
+			"tier_slug":           str("Tier slug."),
+			"tier_uuid":           str("Tier UUID."),
+			"location_name":       str("Location of the storage cluster."),
+			"region":              str("S3 region."),
+			"endpoint":            str("S3 endpoint."),
+			"path_style_url":      str("Path-style URL of the bucket (endpoint/bucket)."),
+			"virtual_host_url":    str("Virtual-hosted URL of the bucket (bucket.endpoint host)."),
+			"versioning":          str("Versioning: off, enabled or suspended."),
+			"protected":           schema.BoolAttribute{Description: "Deletion protection.", Computed: true},
+			"write_blocked":       schema.BoolAttribute{Description: "True while uploads to the bucket are paused.", Computed: true},
+			"size_bytes":          schema.Int64Attribute{Description: "Stored size in bytes (every version), refreshed every 15 minutes.", Computed: true},
+			"objects_count":       schema.Int64Attribute{Description: "Number of objects, refreshed every 15 minutes.", Computed: true},
+			"cdn_connected":       schema.BoolAttribute{Description: "True while a CDN origin serves the bucket.", Computed: true},
+			"cdn_zone_uuid":       str("UUID of the CDN zone serving the bucket, if any."),
+			"cdn_origin_uuid":     str("UUID of the CDN origin serving the bucket, if any."),
+			"cdn_domain":          str("CDN domain serving the bucket, if any."),
+			"tags":                schema.MapAttribute{Description: "Bucket tags as key = value (empty when none).", ElementType: types.StringType, Computed: true},
+			"object_lock_enabled": schema.BoolAttribute{Description: "True when the bucket was created with Object Lock.", Computed: true},
+			"object_lock_default_retention": schema.SingleNestedAttribute{
+				Description: "Default retention of the bucket (null when it has none).",
+				Computed:    true,
+				Attributes: map[string]schema.Attribute{
+					"mode":  str("governance or compliance."),
+					"days":  schema.Int64Attribute{Description: "Retention in days (null when set in years).", Computed: true},
+					"years": schema.Int64Attribute{Description: "Retention in years (null when set in days).", Computed: true},
+				},
+			},
+			"locked_content_kept": schema.BoolAttribute{
+				Description: "True when the last delete left object versions protected by Object Lock in the bucket.",
+				Computed:    true,
+			},
 		},
 	}
 }
@@ -310,6 +328,10 @@ func (d *objectStorageBucketDataSource) Read(ctx context.Context, req datasource
 		CDNOriginUUID: types.StringNull(),
 		CDNDomain:     types.StringNull(),
 		Tags:          tagsToMap(bucket.Tags),
+
+		ObjectLockEnabled:          types.BoolValue(bucket.ObjectLock.Enabled),
+		ObjectLockDefaultRetention: retentionToObject(bucket.ObjectLock.DefaultRetention),
+		LockedContentKept:          types.BoolValue(bucket.LockedContentKept),
 	}
 	state.VirtualHostURL = types.StringNull()
 	if bucket.ProjectID != nil {
