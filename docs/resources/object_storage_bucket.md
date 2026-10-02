@@ -98,7 +98,6 @@ a bucket.
 
 - `accept_object_lock_terms` (Boolean) Accept the Object Lock terms. Required (true) to create a bucket with Object Lock and to set a compliance rule or lengthen the default retention. Sent to the API only; never read back.
 - `bypass_governance_on_destroy` (Boolean) With force_destroy on a bucket with Object Lock, also delete the versions under governance retention when the bucket is destroyed. Versions under compliance retention or legal hold are always kept. Not stored by the API.
-- `encryption` (Boolean) Encryption at rest (AES-256). On when not set at creation. Setting it to true on a bucket created without it enables it in place (the objects already stored are encrypted in the background; in a versioned bucket only the current versions); encryption at rest cannot be turned off once enabled.
 - `force_destroy` (Boolean) Delete every object, version and unfinished upload when the bucket is destroyed. Without it, destroying a bucket that is not empty fails.
 - `object_lock_default_retention` (Attributes) Default retention applied to every object version that has no retention of its own (only with object_lock_enabled). Changed in place; remove it to drop the rule. A compliance rule can only be kept or lengthened, never removed, shortened or turned into governance. Setting compliance or lengthening the rule needs accept_object_lock_terms = true. (see [below for nested schema](#nestedatt--object_lock_default_retention))
 - `object_lock_enabled` (Boolean) Create the bucket with Object Lock (WORM): object versions can be protected from deletion and overwrite until a retention date. It can only be chosen when the bucket is created and never turned off: changing it forces a new bucket. Requires versioning = "enabled" and accept_object_lock_terms = true. When protected is not set, a bucket with Object Lock is created with deletion protection on.
@@ -109,7 +108,7 @@ a bucket.
 
 ### Read-Only
 
-- `encryption_details` (Attributes) Encryption at rest of the bucket's objects (SSE-S3). Null while encryption is off; algorithm is AES256 and scope is all_objects, or new_objects while objects uploaded before encryption was turned on may still be stored unencrypted (they are encrypted in the background). (see [below for nested schema](#nestedatt--encryption_details))
+- `encryption` (Attributes) Encryption at rest of the bucket's objects (SSE-S3, always on, nothing to configure). Null until the bucket default is applied; algorithm is AES256 and scope is all_objects, or new_objects while objects uploaded before the default may still be stored unencrypted (they are re-encrypted in the background). (see [below for nested schema](#nestedatt--encryption))
 - `endpoint` (String) S3 endpoint to configure in clients (for example https://eu.cubestorage.io).
 - `id` (String) The UUID of the bucket.
 - `location_name` (String) Location of the tier's storage cluster.
@@ -117,8 +116,8 @@ a bucket.
 - `region` (String) S3 region to configure in clients (for example eu).
 - `status` (String) Bucket status: pending, active, suspended, blocked, error or deleting.
 
-<a id="nestedatt--encryption_details"></a>
-### Nested Schema for `encryption_details`
+<a id="nestedatt--encryption"></a>
+### Nested Schema for `encryption`
 
 Read-Only:
 
