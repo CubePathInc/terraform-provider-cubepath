@@ -82,7 +82,7 @@ type ObjectStorageBucket struct {
 	LockedContentKept bool                           `json:"locked_content_kept"`
 	Connection        *ObjectStorageBucketConnection `json:"connection"`
 	CDN               *ObjectStorageBucketCDN        `json:"cdn"`
-	// Encryption is the encryption at rest of the bucket; nil until the bucket default is applied
+	// Encryption is the encryption at rest of the bucket; nil while it is off
 	Encryption *ObjectStorageBucketEncryption `json:"encryption"`
 }
 
@@ -92,6 +92,7 @@ type ObjectStorageBucket struct {
 type ObjectStorageBucketEncryption struct {
 	Algorithm string `json:"algorithm"`
 	Scope     string `json:"scope"`
+	AppliedAt string `json:"applied_at"`
 }
 
 // ObjectStorageLockRetention is a default retention rule: a mode (governance or compliance)
@@ -119,6 +120,8 @@ type CreateObjectStorageBucketRequest struct {
 	ObjectLock            bool                        `json:"object_lock,omitempty"`
 	ObjectLockDefault     *ObjectStorageLockRetention `json:"object_lock_default,omitempty"`
 	AcceptObjectLockTerms bool                        `json:"accept_object_lock_terms,omitempty"`
+	// Encryption chooses encryption at rest (AES-256); nil keeps the API default (on)
+	Encryption *bool `json:"encryption,omitempty"`
 }
 
 // SetObjectStorageObjectLockRequest is the body of PUT /object-storage/buckets/{uuid}/object-lock.

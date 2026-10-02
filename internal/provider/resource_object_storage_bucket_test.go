@@ -539,13 +539,150 @@ func TestBucketEncryptionInState(t *testing.T) {
 		Encryption: &client.ObjectStorageBucketEncryption{Algorithm: "AES256", Scope: "new_objects"},
 	}
 	r.mapToState(&state, bucket)
-	attrs := state.Encryption.Attributes()
-	if attrs["algorithm"].(types.String).ValueString() != "AES256" || attrs["scope"].(types.String).ValueString() != "new_objects" {
-		t.Fatalf("encryption %v", state.Encryption)
+	attrs := state.EncryptionDetails.Attributes()
+	if !state.Encryption.ValueBool() || attrs["algorithm"].(types.String).ValueString() != "AES256" ||
+		attrs["scope"].(types.String).ValueString() != "new_objects" {
+		t.Fatalf("encryption %v %v", state.Encryption, state.EncryptionDetails)
 	}
 	bucket.Encryption = nil
 	r.mapToState(&state, bucket)
-	if !state.Encryption.IsNull() {
-		t.Fatalf("null encryption mapped to %v", state.Encryption)
+	if state.Encryption.ValueBool() || !state.EncryptionDetails.IsNull() {
+		t.Fatalf("encryption off mapped to %v %v", state.Encryption, state.EncryptionDetails)
+	}
+}
+
+// Turning encryption off is a plan error; turning it on plans in place (no replacement).
+func TestBucketPlanEncryption(t *testing.T) {
+	ctx := context.Background()
+	server, err := providerserver.NewProtocol6WithError(New("test")())()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &objectStorageBucketResource{}
+	var schemaResp resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+	objType := schemaResp.Schema.Type().TerraformType(ctx)
+	dyn := func(v tftypes.Value) *tfprotov6.DynamicValue {
+		d, err := tfprotov6.NewDynamicValue(objType, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &d
+	}
+	common := map[string]tftypes.Value{
+		"id":                  tftypes.NewValue(tftypes.String, "b-1"),
+		"name":                tftypes.NewValue(tftypes.String, "photos"),
+		"tier":                tftypes.NewValue(tftypes.String, "infrequent_access"),
+		"protected":           tftypes.NewValue(tftypes.Bool, false),
+		"versioning":          tftypes.NewValue(tftypes.String, "off"),
+		"tags":                tagsValue(map[string]string{}),
+		"project_id":          tftypes.NewValue(tftypes.Number, 12),
+		"object_lock_enabled": tftypes.NewValue(tftypes.Bool, false),
+	}
+	with := func(extra map[string]tftypes.Value) map[string]tftypes.Value {
+		m := map[string]tftypes.Value{}
+		for k, v := range common {
+			m[k] = v
+		}
+		for k, v := range extra {
+			m[k] = v
+		}
+		return m
+	}
+	plan := func(stateOn, configOn bool) *tfprotov6.PlanResourceChangeResponse {
+		prior := bucketValues(ctx, schemaResp, with(map[string]tftypes.Value{"encryption": tftypes.NewValue(tftypes.Bool, stateOn)}))
+		set := with(map[string]tftypes.Value{"encryption": tftypes.NewValue(tftypes.Bool, configOn)})
+		resp, err := server.PlanResourceChange(ctx, &tfprotov6.PlanResourceChangeRequest{
+			TypeName:         "cubepath_object_storage_bucket",
+			PriorState:       dyn(prior),
+			Config:           dyn(bucketValues(ctx, schemaResp, set)),
+			ProposedNewState: dyn(bucketValues(ctx, schemaResp, set)),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+	resp := plan(true, false)
+	if len(resp.Diagnostics) != 1 || !strings.Contains(resp.Diagnostics[0].Detail, errEncryptionOff) {
+		t.Fatalf("true -> false: %v", resp.Diagnostics)
+	}
+	resp = plan(false, true)
+	if len(resp.Diagnostics) != 0 || len(resp.RequiresReplace) != 0 {
+		t.Fatalf("false -> true: %v replace %v", resp.Diagnostics, resp.RequiresReplace)
+	}
+}
+
+// encryption false -> true calls PUT .../encryption; nothing is sent when it does not change.
+func TestBucketUpdateEnablesEncryption(t *testing.T) {
+	ctx := context.Background()
+	var puts []string
+	encryption := "null"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPut:
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if body["enabled"] != true {
+				t.Errorf("body %v", body)
+			}
+			puts = append(puts, r.URL.Path)
+			encryption = `{"algorithm":"AES256","scope":"new_objects","applied_at":"2026-10-03T10:00:00"}`
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"detail":"Encryption at rest is being enabled","reencrypt_job_id":7}`))
+		case http.MethodPatch:
+			t.Errorf("unexpected PATCH")
+		default:
+			_, _ = w.Write([]byte(`{"uuid":"b-1","name":"photos","status":"active","versioning":"off",` +
+				`"protected":false,"tier":{"slug":"infrequent_access"},"tags":{},` +
+				`"object_lock":{"enabled":false,"default_retention":null},"encryption":` + encryption + `}`))
+		}
+	}))
+	defer srv.Close()
+	c, err := client.NewClient("token", srv.URL, client.WithMaxRetries(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &objectStorageBucketResource{client: c}
+	var schemaResp resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+	base := map[string]tftypes.Value{
+		"id":         tftypes.NewValue(tftypes.String, "b-1"),
+		"name":       tftypes.NewValue(tftypes.String, "photos"),
+		"tier":       tftypes.NewValue(tftypes.String, "infrequent_access"),
+		"versioning": tftypes.NewValue(tftypes.String, "off"),
+		"protected":  tftypes.NewValue(tftypes.Bool, false),
+		"tags":       tagsValue(map[string]string{}),
+		"encryption": tftypes.NewValue(tftypes.Bool, false),
+	}
+	update := func(on bool) tfsdk.State {
+		planVals := map[string]tftypes.Value{}
+		for k, v := range base {
+			planVals[k] = v
+		}
+		planVals["encryption"] = tftypes.NewValue(tftypes.Bool, on)
+		state := tfsdk.State{Schema: schemaResp.Schema, Raw: bucketValues(ctx, schemaResp, base)}
+		plan := tfsdk.Plan{Schema: schemaResp.Schema, Raw: bucketValues(ctx, schemaResp, planVals)}
+		resp := &resource.UpdateResponse{State: state}
+		r.Update(ctx, resource.UpdateRequest{Plan: plan, State: state}, resp)
+		if resp.Diagnostics.HasError() {
+			t.Fatalf("update: %v", resp.Diagnostics)
+		}
+		return resp.State
+	}
+	update(false)
+	if len(puts) != 0 {
+		t.Fatalf("unchanged encryption sent: %v", puts)
+	}
+	st := update(true)
+	if len(puts) != 1 || puts[0] != "/object-storage/buckets/b-1/encryption" {
+		t.Fatalf("puts %v", puts)
+	}
+	var on types.Bool
+	st.GetAttribute(ctx, path.Root("encryption"), &on)
+	var scope types.String
+	st.GetAttribute(ctx, path.Root("encryption_details").AtName("scope"), &scope)
+	if !on.ValueBool() || scope.ValueString() != "new_objects" {
+		t.Fatalf("state %v %v", on, scope)
 	}
 }

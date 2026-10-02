@@ -21,6 +21,10 @@ resource "cubepath_object_storage_bucket" "assets" {
   versioning = "enabled"
   protected  = true # set to false before destroying it
 
+  # Encryption at rest (AES-256) is on unless created with encryption = false. A bucket
+  # created without it can be switched to true later (in place); it is never turned off.
+  # encryption = false
+
   # Labels for organizing and filtering buckets, changed in place. They are not
   # visible through S3 (aws_s3_bucket_tagging gets 403); object tags are, for
   # example aws_s3_object with tags.

@@ -70,7 +70,8 @@ type objectStorageBucketResourceModel struct {
 	AcceptObjectLockTerms      types.Bool   `tfsdk:"accept_object_lock_terms"`
 	BypassGovernanceOnDestroy  types.Bool   `tfsdk:"bypass_governance_on_destroy"`
 	LockedContentKept          types.Bool   `tfsdk:"locked_content_kept"`
-	Encryption                 types.Object `tfsdk:"encryption"`
+	Encryption                 types.Bool   `tfsdk:"encryption"`
+	EncryptionDetails          types.Object `tfsdk:"encryption_details"`
 }
 
 // encryptionAttrTypes is the shape of encryption.
@@ -79,7 +80,7 @@ var encryptionAttrTypes = map[string]attr.Type{
 	"scope":     types.StringType,
 }
 
-// encryptionToObject converts the API encryption block; null until the bucket default is applied.
+// encryptionToObject converts the API encryption block; null while encryption is off.
 func encryptionToObject(e *client.ObjectStorageBucketEncryption) types.Object {
 	if e == nil {
 		return types.ObjectNull(encryptionAttrTypes)
@@ -90,11 +91,13 @@ func encryptionToObject(e *client.ObjectStorageBucketEncryption) types.Object {
 	})
 }
 
-// encryptionDescription documents the encryption attribute in the resource and the data source.
-const encryptionDescription = "Encryption at rest of the bucket's objects (SSE-S3, always on, nothing to " +
-	"configure). Null until the bucket default is applied; algorithm is AES256 and scope is all_objects, or " +
-	"new_objects while objects uploaded before the default may still be stored unencrypted (they are " +
-	"re-encrypted in the background)."
+// encryptionDescription documents the encryption_details attribute in the resource and the data source.
+const encryptionDescription = "Encryption at rest of the bucket's objects (SSE-S3). Null while encryption is " +
+	"off; algorithm is AES256 and scope is all_objects, or new_objects while objects uploaded before " +
+	"encryption was turned on may still be stored unencrypted (they are encrypted in the background)."
+
+// errEncryptionOff is the plan error of turning encryption at rest off.
+const errEncryptionOff = "encryption at rest cannot be turned off once enabled"
 
 // lockRetentionAttrTypes is the shape of object_lock_default_retention.
 var lockRetentionAttrTypes = map[string]attr.Type{
@@ -235,7 +238,15 @@ func (r *objectStorageBucketResource) Schema(_ context.Context, _ resource.Schem
 				Computed:      true,
 				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
 			},
-			"encryption": schema.SingleNestedAttribute{
+			"encryption": schema.BoolAttribute{
+				Description: "Encryption at rest (AES-256). On when not set at creation. Setting it to true on " +
+					"a bucket created without it enables it in place (the objects already stored are encrypted in " +
+					"the background; in a versioned bucket only the current versions); " + errEncryptionOff + ".",
+				Optional:      true,
+				Computed:      true,
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()},
+			},
+			"encryption_details": schema.SingleNestedAttribute{
 				Description:   encryptionDescription,
 				Computed:      true,
 				PlanModifiers: []planmodifier.Object{objectplanmodifier.UseStateForUnknown()},
@@ -375,6 +386,24 @@ func (r *objectStorageBucketResource) ModifyPlan(ctx context.Context, req resour
 	if req.Plan.Raw.IsNull() {
 		return
 	}
+	if !req.State.Raw.IsNull() {
+		var stateEncryption, planEncryption types.Bool
+		resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("encryption"), &stateEncryption)...)
+		resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("encryption"), &planEncryption)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if stateEncryption.ValueBool() && !planEncryption.IsUnknown() && !planEncryption.ValueBool() {
+			resp.Diagnostics.AddAttributeError(path.Root("encryption"), "Encryption at rest cannot be turned off",
+				"The bucket is encrypted: "+errEncryptionOff+". Remove encryption = false or set it to true.")
+			return
+		}
+		if !planEncryption.Equal(stateEncryption) {
+			// Turning it on moves encryption_details: the API computes them
+			resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("encryption_details"),
+				types.ObjectUnknown(encryptionAttrTypes))...)
+		}
+	}
 	var configProtected types.Bool
 	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("protected"), &configProtected)...)
 	if resp.Diagnostics.HasError() || !configProtected.IsNull() {
@@ -513,10 +542,13 @@ func (r *objectStorageBucketResource) Create(ctx context.Context, req resource.C
 		return
 	}
 
+	// Not set in the configuration: on, the API's default
+	encryption := plan.Encryption.IsNull() || plan.Encryption.IsUnknown() || plan.Encryption.ValueBool()
 	createReq := &client.CreateObjectStorageBucketRequest{
 		Name:       plan.Name.ValueString(),
 		Tier:       plan.Tier.ValueString(),
 		Versioning: versioning == "enabled",
+		Encryption: &encryption,
 	}
 	if plan.ObjectLockEnabled.ValueBool() {
 		// ValidateConfig already requires versioning enabled; never send false with the lock.
@@ -619,6 +651,13 @@ func (r *objectStorageBucketResource) Update(ctx context.Context, req resource.U
 	if changed {
 		if err := r.client.ObjectStorage.UpdateBucket(ctx, state.ID.ValueString(), updateReq); err != nil {
 			resp.Diagnostics.AddError("Error updating Object Storage bucket", err.Error())
+			return
+		}
+	}
+
+	if plan.Encryption.ValueBool() && !state.Encryption.ValueBool() {
+		if err := r.client.ObjectStorage.EnableBucketEncryption(ctx, state.ID.ValueString()); err != nil {
+			resp.Diagnostics.AddError("Error enabling encryption at rest", err.Error())
 			return
 		}
 	}
@@ -792,7 +831,8 @@ func (r *objectStorageBucketResource) mapToState(state *objectStorageBucketResou
 	state.ObjectLockEnabled = types.BoolValue(bucket.ObjectLock.Enabled)
 	state.ObjectLockDefaultRetention = retentionToObject(bucket.ObjectLock.DefaultRetention)
 	state.LockedContentKept = types.BoolValue(bucket.LockedContentKept)
-	state.Encryption = encryptionToObject(bucket.Encryption)
+	state.Encryption = types.BoolValue(bucket.Encryption != nil)
+	state.EncryptionDetails = encryptionToObject(bucket.Encryption)
 	if state.BypassGovernanceOnDestroy.IsNull() || state.BypassGovernanceOnDestroy.IsUnknown() {
 		state.BypassGovernanceOnDestroy = types.BoolValue(false)
 	}

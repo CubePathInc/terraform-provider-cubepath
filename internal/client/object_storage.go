@@ -63,6 +63,12 @@ func (s *ObjectStorageService) SetBucketObjectLock(ctx context.Context, uuid str
 	return s.client.Put(ctx, "/object-storage/buckets/"+url.PathEscape(uuid)+"/object-lock", req, nil)
 }
 
+// EnableBucketEncryption turns on encryption at rest for a bucket created without it; the objects
+// already stored are encrypted in the background. It cannot be turned off afterwards.
+func (s *ObjectStorageService) EnableBucketEncryption(ctx context.Context, uuid string) error {
+	return s.client.Put(ctx, "/object-storage/buckets/"+url.PathEscape(uuid)+"/encryption", map[string]bool{"enabled": true}, nil)
+}
+
 // DeleteBucket starts the deletion of a bucket. With force its content is purged first;
 // bypassGovernance (only with force) also deletes versions under governance retention.
 func (s *ObjectStorageService) DeleteBucket(ctx context.Context, uuid string, force, bypassGovernance bool) error {
