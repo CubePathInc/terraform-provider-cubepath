@@ -106,6 +106,8 @@ resource "cubepath_vps" "web" {
 - `cubepath_object_storage_access_key` - Manage Object Storage access keys for S3 clients
 - `cubepath_object_storage_replication` - Replicate an Object Storage bucket to another CubePath bucket or to an external S3 compatible bucket
 - `cubepath_object_storage_replication_grant` - Authorize another organization to replicate into one of your buckets
+- `cubepath_object_storage_event_destination` - Manage destinations of Object Storage event notifications (signed webhooks, Slack or Discord channels)
+- `cubepath_object_storage_event_rule` - Send a bucket's object events (created, removed, tagged) to an event destination
 - `cubepath_managed_database` - Manage Managed Databases (MySQL, PostgreSQL, Valkey): plan, replicas, backups, configuration
 - `cubepath_managed_database_database` - Manage databases inside a Managed Database
 - `cubepath_managed_database_user` - Manage users of a Managed Database
