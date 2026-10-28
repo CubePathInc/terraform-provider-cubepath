@@ -8,13 +8,12 @@ import (
 
 	"github.com/cubepath/terraform-provider-cubepath/internal/client"
 	"github.com/cubepath/terraform-provider-cubepath/internal/utils"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -65,7 +64,8 @@ func (r *objectStorageAccessKeyResource) Schema(_ context.Context, _ resource.Sc
 			"The secret is only returned when the key is created and is kept in the Terraform state " +
 			"(marked sensitive): protect your state. Import with the key UUID " +
 			"(terraform import cubepath_object_storage_access_key.example <uuid>); an imported key has no secret. " +
-			"Every attribute forces a new key when changed.",
+			"The name, permission, buckets and bypass_governance are updated in place (the access key ID and the " +
+			"secret do not change); changing the tier, project_id or expires_at forces a new key.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description:   "The UUID of the access key.",
@@ -73,9 +73,8 @@ func (r *objectStorageAccessKeyResource) Schema(_ context.Context, _ resource.Sc
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"name": schema.StringAttribute{
-				Description:   "Key name (1 to 100 characters).",
-				Required:      true,
-				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+				Description: "Key name (1 to 100 characters).",
+				Required:    true,
 			},
 			"tier": schema.StringAttribute{
 				Description:   "Storage tier, by slug (for example infrequent_access) or UUID.",
@@ -92,18 +91,17 @@ func (r *objectStorageAccessKeyResource) Schema(_ context.Context, _ resource.Sc
 				},
 			},
 			"permission": schema.StringAttribute{
-				Description:   "read_write or read_only. Defaults to read_write.",
-				Optional:      true,
-				Computed:      true,
-				Default:       stringdefault.StaticString("read_write"),
-				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+				Description: "read_write or read_only. Defaults to read_write.",
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString("read_write"),
 			},
 			"buckets": schema.ListAttribute{
 				Description: "UUIDs of the buckets the key is limited to (1 to 20, same project and tier). " +
-					"Omit it to give the key access to every bucket of the project in the tier, present and future.",
-				ElementType:   types.StringType,
-				Optional:      true,
-				PlanModifiers: []planmodifier.List{listplanmodifier.RequiresReplace()},
+					"Omit it to give the key access to every bucket of the project in the tier, present and future. " +
+					"Changing it updates the key in place.",
+				ElementType: types.StringType,
+				Optional:    true,
 			},
 			"expires_at": schema.StringAttribute{
 				Description:   "Optional expiry time in RFC 3339 (for example 2027-01-01T00:00:00Z). The key stops working then.",
@@ -113,11 +111,10 @@ func (r *objectStorageAccessKeyResource) Schema(_ context.Context, _ resource.Sc
 			"bypass_governance": schema.BoolAttribute{
 				Description: "Allow this key to delete or overwrite object versions under governance retention " +
 					"in buckets with Object Lock, by sending the x-amz-bypass-governance-retention: true header. " +
-					"Only for read_write keys. Changing it forces a new key. Defaults to false.",
-				Optional:      true,
-				Computed:      true,
-				Default:       booldefault.StaticBool(false),
-				PlanModifiers: []planmodifier.Bool{boolplanmodifier.RequiresReplace()},
+					"Only for read_write keys: to make a bypass key read_only, set it to false too. Defaults to false.",
+				Optional: true,
+				Computed: true,
+				Default:  booldefault.StaticBool(false),
 			},
 			"access_key_id": schema.StringAttribute{
 				Description:   "The access key ID to configure in S3 clients.",
@@ -283,14 +280,64 @@ func (r *objectStorageAccessKeyResource) Read(ctx context.Context, req resource.
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-// Update is never called with a real change: every configurable attribute forces a new key.
 func (r *objectStorageAccessKeyResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan objectStorageAccessKeyResourceModel
+	var plan, state objectStorageAccessKeyResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	updateReq, diags := buildAccessKeyUpdate(ctx, plan, state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	id := state.ID.ValueString()
+	if *updateReq != (client.UpdateObjectStorageKeyRequest{}) {
+		if err := r.client.ObjectStorage.UpdateKey(ctx, id, updateReq); err != nil {
+			resp.Diagnostics.AddError("Error updating Object Storage access key", err.Error())
+			return
+		}
+	}
+
+	key, err := r.client.ObjectStorage.GetKey(ctx, id)
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading Object Storage access key after the update", err.Error())
+		return
+	}
+
+	// The secret is never returned again: keep the one from the state.
+	plan.SecretAccessKey = state.SecretAccessKey
+	r.mapToState(&plan, key)
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
+}
+
+// buildAccessKeyUpdate returns the PATCH body with only the attributes whose plan differs from the state.
+// Buckets going from a list to null sends "bucket_uuids": null (every bucket).
+func buildAccessKeyUpdate(ctx context.Context, plan, state objectStorageAccessKeyResourceModel) (*client.UpdateObjectStorageKeyRequest, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	body := &client.UpdateObjectStorageKeyRequest{}
+	if !plan.Name.Equal(state.Name) {
+		v := plan.Name.ValueString()
+		body.Name = &v
+	}
+	if !plan.Permission.Equal(state.Permission) {
+		v := plan.Permission.ValueString()
+		body.Permission = &v
+	}
+	if !plan.BypassGovernance.Equal(state.BypassGovernance) {
+		v := plan.BypassGovernance.ValueBool()
+		body.BypassGovernance = &v
+	}
+	if !plan.Buckets.Equal(state.Buckets) {
+		var buckets []string
+		if !plan.Buckets.IsNull() && !plan.Buckets.IsUnknown() {
+			diags.Append(plan.Buckets.ElementsAs(ctx, &buckets, false)...)
+		}
+		body.BucketUUIDs = &buckets
+	}
+	return body, diags
 }
 
 func (r *objectStorageAccessKeyResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

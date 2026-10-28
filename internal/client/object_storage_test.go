@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 )
 
@@ -391,5 +392,44 @@ func TestReplicationGrantRoutes(t *testing.T) {
 	}
 	if d := (*reqs)[len(*reqs)-1]; d.Method != http.MethodDelete || d.Path != "/object-storage/replication-grants/g1" {
 		t.Fatalf("got %+v", d)
+	}
+}
+
+func TestUpdateKeySendsOnlyTheFieldsSet(t *testing.T) {
+	c, reqs := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"detail":"Access key updated."}`))
+	})
+	ctx := context.Background()
+
+	name, perm, bypass := "renamed", "read_only", false
+	list := []string{"b1", "b2"}
+	var all []string
+	cases := []struct {
+		req  UpdateObjectStorageKeyRequest
+		want map[string]interface{}
+	}{
+		{UpdateObjectStorageKeyRequest{Name: &name}, map[string]interface{}{"name": "renamed"}},
+		{UpdateObjectStorageKeyRequest{Permission: &perm, BypassGovernance: &bypass}, map[string]interface{}{"permission": "read_only", "bypass_governance": false}},
+		{UpdateObjectStorageKeyRequest{BucketUUIDs: &list}, map[string]interface{}{"bucket_uuids": []interface{}{"b1", "b2"}}},
+		{UpdateObjectStorageKeyRequest{BucketUUIDs: &all}, map[string]interface{}{"bucket_uuids": nil}},
+	}
+	for i, tc := range cases {
+		req := tc.req
+		if err := c.ObjectStorage.UpdateKey(ctx, "k1", &req); err != nil {
+			t.Fatal(err)
+		}
+		got := (*reqs)[i]
+		if got.Method != http.MethodPatch || got.Path != "/object-storage/keys/k1" {
+			t.Fatalf("case %d: %s %s", i, got.Method, got.Path)
+		}
+		if len(got.Body) != len(tc.want) {
+			t.Fatalf("case %d: body %v, want %v", i, got.Body, tc.want)
+		}
+		for k, v := range tc.want {
+			gv, ok := got.Body[k]
+			if !ok || !reflect.DeepEqual(gv, v) {
+				t.Fatalf("case %d: %s = %v (present %v), want %v", i, k, gv, ok, v)
+			}
+		}
 	}
 }

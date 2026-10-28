@@ -55,6 +55,8 @@ resource "cubepath_object_storage_bucket_lifecycle" "assets" {
 }
 
 # A read only key limited to that bucket, for an application or a backup job
+# The name, permission, buckets and bypass_governance of a key update in place (same access key ID and
+# secret); the tier, project_id and expires_at are fixed at creation.
 resource "cubepath_object_storage_access_key" "app" {
   name       = "app-read-only"
   tier       = "infrequent_access"

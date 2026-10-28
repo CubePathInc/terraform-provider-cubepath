@@ -3,12 +3,12 @@
 page_title: "cubepath_object_storage_access_key Resource - cubepath"
 subcategory: ""
 description: |-
-  Manages a CubePath Object Storage access key for S3 clients (AWS CLI, rclone, SDKs). The secret is only returned when the key is created and is kept in the Terraform state (marked sensitive): protect your state. Import with the key UUID (terraform import cubepath_object_storage_access_key.example ); an imported key has no secret. Every attribute forces a new key when changed.
+  Manages a CubePath Object Storage access key for S3 clients (AWS CLI, rclone, SDKs). The secret is only returned when the key is created and is kept in the Terraform state (marked sensitive): protect your state. Import with the key UUID (terraform import cubepath_object_storage_access_key.example ); an imported key has no secret. The name, permission, buckets and bypass_governance are updated in place (the access key ID and the secret do not change); changing the tier, project_id or expires_at forces a new key.
 ---
 
 # cubepath_object_storage_access_key (Resource)
 
-Manages a CubePath Object Storage access key for S3 clients (AWS CLI, rclone, SDKs). The secret is only returned when the key is created and is kept in the Terraform state (marked sensitive): protect your state. Import with the key UUID (terraform import cubepath_object_storage_access_key.example <uuid>); an imported key has no secret. Every attribute forces a new key when changed.
+Manages a CubePath Object Storage access key for S3 clients (AWS CLI, rclone, SDKs). The secret is only returned when the key is created and is kept in the Terraform state (marked sensitive): protect your state. Import with the key UUID (terraform import cubepath_object_storage_access_key.example <uuid>); an imported key has no secret. The name, permission, buckets and bypass_governance are updated in place (the access key ID and the secret do not change); changing the tier, project_id or expires_at forces a new key.
 
 
 
@@ -22,8 +22,8 @@ Manages a CubePath Object Storage access key for S3 clients (AWS CLI, rclone, SD
 
 ### Optional
 
-- `buckets` (List of String) UUIDs of the buckets the key is limited to (1 to 20, same project and tier). Omit it to give the key access to every bucket of the project in the tier, present and future.
-- `bypass_governance` (Boolean) Allow this key to delete or overwrite object versions under governance retention in buckets with Object Lock, by sending the x-amz-bypass-governance-retention: true header. Only for read_write keys. Changing it forces a new key. Defaults to false.
+- `buckets` (List of String) UUIDs of the buckets the key is limited to (1 to 20, same project and tier). Omit it to give the key access to every bucket of the project in the tier, present and future. Changing it updates the key in place.
+- `bypass_governance` (Boolean) Allow this key to delete or overwrite object versions under governance retention in buckets with Object Lock, by sending the x-amz-bypass-governance-retention: true header. Only for read_write keys: to make a bypass key read_only, set it to false too. Defaults to false.
 - `expires_at` (String) Optional expiry time in RFC 3339 (for example 2027-01-01T00:00:00Z). The key stops working then.
 - `permission` (String) read_write or read_only. Defaults to read_write.
 - `project_id` (Number) Project ID. Defaults to the organization's first project.

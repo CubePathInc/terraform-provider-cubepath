@@ -160,6 +160,16 @@ type ObjectStorageAccessKey struct {
 	BypassGovernance bool `json:"bypass_governance"`
 }
 
+// UpdateObjectStorageKeyRequest is the body of PATCH /object-storage/keys/{uuid}. Only the fields set are sent.
+// BucketUUIDs: nil leaves the buckets unchanged, a pointer to a nil slice sends null (every bucket of the
+// project in the tier, present and future), a pointer to a list limits the key to those buckets.
+type UpdateObjectStorageKeyRequest struct {
+	Name             *string   `json:"name,omitempty"`
+	Permission       *string   `json:"permission,omitempty"`
+	BucketUUIDs      *[]string `json:"bucket_uuids,omitempty"`
+	BypassGovernance *bool     `json:"bypass_governance,omitempty"`
+}
+
 // CreateObjectStorageKeyRequest is the body of POST /object-storage/keys
 type CreateObjectStorageKeyRequest struct {
 	Name        string   `json:"name"`

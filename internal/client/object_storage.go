@@ -106,6 +106,12 @@ func (s *ObjectStorageService) CreateKey(ctx context.Context, req *CreateObjectS
 	return &result, nil
 }
 
+// UpdateKey changes the name, permission, buckets or governance bypass of an access key. The access key ID
+// and the secret do not change. The API answers with a detail message only: read the key back with GetKey.
+func (s *ObjectStorageService) UpdateKey(ctx context.Context, uuid string, req *UpdateObjectStorageKeyRequest) error {
+	return s.client.Patch(ctx, "/object-storage/keys/"+url.PathEscape(uuid), req, nil)
+}
+
 // DeleteKey starts the revocation of an access key
 func (s *ObjectStorageService) DeleteKey(ctx context.Context, uuid string) error {
 	return s.client.Delete(ctx, "/object-storage/keys/"+url.PathEscape(uuid))
