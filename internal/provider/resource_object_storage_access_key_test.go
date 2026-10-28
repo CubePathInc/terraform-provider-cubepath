@@ -33,6 +33,12 @@ func TestBuildAccessKeyUpdateSendsOnlyTheChanges(t *testing.T) {
 		"list to null":      {accessKeyModel("ci", "read_write", nil, false), `{"bucket_uuids":null}`},
 		"name and all keys": {accessKeyModel("ci2", "read_write", nil, false), `{"name":"ci2","bucket_uuids":null}`},
 	}
+	unknown := accessKeyModel("ci", "read_write", nil, false)
+	unknown.Buckets = types.ListUnknown(types.StringType)
+	cases["unknown list is not sent"] = struct {
+		plan objectStorageAccessKeyResourceModel
+		want string
+	}{unknown, `{}`}
 	for label, tc := range cases {
 		body, diags := buildAccessKeyUpdate(context.Background(), tc.plan, state)
 		if diags.HasError() {

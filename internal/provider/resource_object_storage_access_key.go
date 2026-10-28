@@ -330,9 +330,10 @@ func buildAccessKeyUpdate(ctx context.Context, plan, state objectStorageAccessKe
 		v := plan.BypassGovernance.ValueBool()
 		body.BypassGovernance = &v
 	}
-	if !plan.Buckets.Equal(state.Buckets) {
+	// An unknown list is never sent: as null it would open the key to every bucket.
+	if !plan.Buckets.IsUnknown() && !plan.Buckets.Equal(state.Buckets) {
 		var buckets []string
-		if !plan.Buckets.IsNull() && !plan.Buckets.IsUnknown() {
+		if !plan.Buckets.IsNull() {
 			diags.Append(plan.Buckets.ElementsAs(ctx, &buckets, false)...)
 		}
 		body.BucketUUIDs = &buckets
