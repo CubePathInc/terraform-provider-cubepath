@@ -142,7 +142,7 @@ func (p *cubePathProvider) Configure(ctx context.Context, req provider.Configure
 	}
 
 	// Create a new CubePath client using the configuration values
-	apiClient, err := client.NewClient(apiToken, baseURL)
+	apiClient, err := client.NewClient(apiToken, baseURL, client.WithUserAgent(p.version))
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create CubePath API Client",

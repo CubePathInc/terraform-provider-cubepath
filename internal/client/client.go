@@ -19,6 +19,7 @@ type Client struct {
 	httpClient *http.Client
 	baseURL    string
 	apiToken   string
+	userAgent  string
 
 	// Retry configuration
 	maxRetries   int
@@ -75,6 +76,19 @@ func WithRetryWaitMax(d time.Duration) ClientOption {
 	}
 }
 
+// userAgentProduct is the product name sent in the User-Agent header.
+const userAgentProduct = "terraform-provider-cubepath"
+
+// WithUserAgent sets the provider version sent in the User-Agent header, as
+// terraform-provider-cubepath/<version>. An empty version keeps the default.
+func WithUserAgent(version string) ClientOption {
+	return func(c *Client) {
+		if version != "" {
+			c.userAgent = userAgentProduct + "/" + version
+		}
+	}
+}
+
 // WithHTTPClient sets a custom HTTP client
 func WithHTTPClient(httpClient *http.Client) ClientOption {
 	return func(c *Client) {
@@ -107,6 +121,7 @@ func NewClient(apiToken, baseURL string, opts ...ClientOption) (*Client, error) 
 		httpClient:   defaultHTTPClient,
 		baseURL:      baseURL,
 		apiToken:     apiToken,
+		userAgent:    userAgentProduct + "/dev",
 		maxRetries:   3,
 		retryWaitMin: 1 * time.Second,
 		retryWaitMax: 30 * time.Second,
@@ -212,6 +227,7 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body inter
 	req.Header.Set("Authorization", "Bearer "+c.apiToken)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", c.userAgent)
 
 	return req, nil
 }
