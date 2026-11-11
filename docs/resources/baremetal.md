@@ -3,12 +3,12 @@
 page_title: "cubepath_baremetal Resource - cubepath"
 subcategory: ""
 description: |-
-  Manages a Baremetal server on CubePath Cloud. Destroying this resource (terraform destroy, or removing it from the configuration) only removes it from the Terraform state: the server is still running and billed, and has to be cancelled from the CubePath dashboard.
+  Manages a Baremetal server on CubePath Cloud. Destroying this resource (terraform destroy, or removing it from the configuration) only removes it from the Terraform state: the server is still running and billed, and has to be cancelled from the CubePath dashboard. If the server is no longer found in any project, the read fails with an error instead of dropping it from the state, so the next plan does not create a second server; if it was cancelled on purpose, remove it with terraform state rm.
 ---
 
 # cubepath_baremetal (Resource)
 
-Manages a Baremetal server on CubePath Cloud. Destroying this resource (terraform destroy, or removing it from the configuration) only removes it from the Terraform state: the server is still running and billed, and has to be cancelled from the CubePath dashboard.
+Manages a Baremetal server on CubePath Cloud. Destroying this resource (terraform destroy, or removing it from the configuration) only removes it from the Terraform state: the server is still running and billed, and has to be cancelled from the CubePath dashboard. If the server is no longer found in any project, the read fails with an error instead of dropping it from the state, so the next plan does not create a second server; if it was cancelled on purpose, remove it with terraform state rm.
 
 
 

@@ -69,7 +69,7 @@ func (r *baremetalResource) Metadata(_ context.Context, req resource.MetadataReq
 
 func (r *baremetalResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages a Baremetal server on CubePath Cloud. Destroying this resource (terraform destroy, or removing it from the configuration) only removes it from the Terraform state: the server is still running and billed, and has to be cancelled from the CubePath dashboard.",
+		Description: "Manages a Baremetal server on CubePath Cloud. Destroying this resource (terraform destroy, or removing it from the configuration) only removes it from the Terraform state: the server is still running and billed, and has to be cancelled from the CubePath dashboard. If the server is no longer found in any project, the read fails with an error instead of dropping it from the state, so the next plan does not create a second server; if it was cancelled on purpose, remove it with terraform state rm.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description: "The server number, as text. Import accepts the number or the uuid; the state always keeps the number.",
@@ -405,8 +405,18 @@ func (r *baremetalResource) Read(ctx context.Context, req resource.ReadRequest, 
 
 	baremetal, err := r.client.Baremetal.Get(ctx, id)
 	if err != nil {
+		// A baremetal that is not found is an error, never RemoveResource: the next
+		// plan would see the resource as missing and buy another server. If the
+		// server was cancelled on purpose, remove it with terraform state rm.
 		if apiErr, ok := err.(*client.APIError); ok && apiErr.IsNotFound() {
-			resp.State.RemoveResource(ctx)
+			resp.Diagnostics.AddError(
+				"Baremetal not found",
+				"Baremetal "+state.ID.ValueString()+" was not found in any project of this organization. "+
+					"The provider keeps it in the state instead of dropping it, so that the next plan does not create "+
+					"(and bill) a second server. If the server was cancelled on purpose, remove it from the state with "+
+					"'terraform state rm cubepath_baremetal.<name>'. Otherwise check the API token and organization. "+
+					"API response: "+apiErr.Error(),
+			)
 			return
 		}
 
