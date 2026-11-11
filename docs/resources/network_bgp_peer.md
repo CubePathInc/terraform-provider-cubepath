@@ -18,7 +18,7 @@ Manages a BGP peer (Dynamic Routes) of a private network: an eBGP session betwee
 ### Required
 
 - `network_id` (Number) ID of the private network. Changing it forces a new peer.
-- `peer_target` (String) An IP address inside the network, or the ID of a VPS or baremetal server attached to it. Changing it forces a new peer.
+- `peer_target` (String) An IP address inside the network, or the ID of a VPS or baremetal server attached to it. For a baremetal server use the server number (the id attribute of cubepath_baremetal), not its uuid. Changing it forces a new peer.
 - `peer_type` (String) How the neighbor is given: ip, vps or baremetal. Changing it forces a new peer.
 - `remote_asn` (Number) AS number of the neighbor, not 64512. Changing it forces a new peer.
 

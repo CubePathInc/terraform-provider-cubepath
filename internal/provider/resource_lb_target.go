@@ -21,12 +21,13 @@ import (
 )
 
 var (
-	_ resource.Resource                = &lbTargetResource{}
-	_ resource.ResourceWithConfigure   = &lbTargetResource{}
-	_ resource.ResourceWithImportState = &lbTargetResource{}
-	_ resource.Resource                = &lbHealthCheckResource{}
-	_ resource.ResourceWithConfigure   = &lbHealthCheckResource{}
-	_ resource.ResourceWithImportState = &lbHealthCheckResource{}
+	_ resource.Resource                   = &lbTargetResource{}
+	_ resource.ResourceWithConfigure      = &lbTargetResource{}
+	_ resource.ResourceWithValidateConfig = &lbTargetResource{}
+	_ resource.ResourceWithImportState    = &lbTargetResource{}
+	_ resource.Resource                   = &lbHealthCheckResource{}
+	_ resource.ResourceWithConfigure      = &lbHealthCheckResource{}
+	_ resource.ResourceWithImportState    = &lbHealthCheckResource{}
 )
 
 // A load balancer applies one configuration change at a time: while a previous change is
@@ -101,7 +102,7 @@ func (r *lbTargetResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"target_id": schema.StringAttribute{
-				Description:   "ID of the VPS or baremetal server, or UUID of the availability group. Changing it forces a new target.",
+				Description:   "ID of the VPS or baremetal server, or UUID of the availability group. For a baremetal server use the server number (the id attribute of cubepath_baremetal), not its uuid. Changing it forces a new target.",
 				Required:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
@@ -511,4 +512,9 @@ func (r *lbHealthCheckResource) ImportState(ctx context.Context, req resource.Im
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("loadbalancer_id"), lbID)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("listener_id"), listenerID)...)
+}
+
+// ValidateConfig rejects a uuid as the target of a baremetal server: the field takes the server number.
+func (r *lbTargetResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	validateNoBaremetalUUID(ctx, req.Config, "target_type", "target_id", &resp.Diagnostics)
 }

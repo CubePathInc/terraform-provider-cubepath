@@ -185,6 +185,9 @@ terraform destroy
 # Import a VPS (get ID from dashboard or API)
 terraform import cubepath_vps.existing <vps-id>
 
+# Import a baremetal server (the server number or its uuid; the state keeps the number)
+terraform import cubepath_baremetal.existing <number-or-uuid>
+
 # Import a project
 terraform import cubepath_project.existing <project-id>
 ```

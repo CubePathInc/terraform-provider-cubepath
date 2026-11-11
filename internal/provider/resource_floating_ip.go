@@ -85,7 +85,7 @@ func (r *floatingIPResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Optional:    true,
 			},
 			"assign_baremetal_id": schema.Int64Attribute{
-				Description: "Baremetal server ID to assign the floating IP to.",
+				Description: "Baremetal server number (the id attribute of cubepath_baremetal, as a number; not the uuid) to assign the floating IP to.",
 				Optional:    true,
 			},
 			"status": schema.StringAttribute{

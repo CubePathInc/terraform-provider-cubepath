@@ -6,7 +6,12 @@ import (
 	"net"
 	"regexp"
 
+	"github.com/cubepath/terraform-provider-cubepath/internal/client"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -197,4 +202,24 @@ func (v strongPasswordValidator) ValidateString(ctx context.Context, req validat
 // StrongPasswordValidator returns a validator for strong passwords
 func StrongPasswordValidator() validator.String {
 	return strongPasswordValidator{}
+}
+
+// validateNoBaremetalUUID rejects a uuid-shaped target when the target is a baremetal
+// server. The API gives and compares the server number in these fields (and rewrites the
+// stored value as the number), so a uuid would show a permanent difference and, where the
+// attribute forces a new resource, replace it. Unknown values cannot be checked at plan time.
+func validateNoBaremetalUUID(ctx context.Context, config tfsdk.Config, typeAttr, targetAttr string, diags *diag.Diagnostics) {
+	var targetType, target types.String
+	diags.Append(config.GetAttribute(ctx, path.Root(typeAttr), &targetType)...)
+	diags.Append(config.GetAttribute(ctx, path.Root(targetAttr), &target)...)
+	if diags.HasError() || targetType.IsNull() || targetType.IsUnknown() || target.IsNull() || target.IsUnknown() {
+		return
+	}
+	if targetType.ValueString() == "baremetal" && client.IsUUID(target.ValueString()) {
+		diags.AddAttributeError(
+			path.Root(targetAttr),
+			"Use the server number, not its uuid",
+			fmt.Sprintf("%s must be the baremetal server number (the .id attribute of cubepath_baremetal), not its uuid.", targetAttr),
+		)
+	}
 }

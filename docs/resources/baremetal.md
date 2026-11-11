@@ -41,7 +41,8 @@ Manages a Baremetal server on CubePath Cloud. Destroying this resource (terrafor
 - `cpu` (String) CPU model of the server.
 - `created_at` (String) The timestamp when the server was deployed.
 - `disk_size` (String) Total disk size.
-- `id` (String) The unique identifier of the Baremetal server.
+- `id` (String) The server number, as text. Import accepts the number or the uuid; the state always keeps the number.
+- `uuid` (String) The uuid of the Baremetal server. Null while the API does not send it.
 - `ipv6` (String) The IPv6 address of the server.
 - `main_ip` (String) The main public IPv4 address of the server.
 - `private_ip` (String) Address of the server in the private network.

@@ -22,7 +22,7 @@ Manages a floating IP address on CubePath Cloud.
 
 ### Optional
 
-- `assign_baremetal_id` (Number) Baremetal server ID to assign the floating IP to.
+- `assign_baremetal_id` (Number) Baremetal server number (the id attribute of cubepath_baremetal, as a number; not the uuid) to assign the floating IP to.
 - `assign_vps_id` (Number) VPS ID to assign the floating IP to.
 - `reverse_dns` (String) Reverse DNS (PTR record) hostname.
 

@@ -68,7 +68,7 @@ resource "cubepath_alert_rule" "bucket_size" {
 - `name` (String) Name, unique in the organization: up to 128 letters, numbers, spaces and hyphens.
 - `operator` (String) Comparison: gt, gte, lt, lte or eq. Monthly metrics (storage_cost_month and storage_egress_gb_month) only accept gt and gte.
 - `project_id` (Number) Project ID. Changing it forces a new rule.
-- `target_id` (String) ID of the VPS or baremetal server, UUID of the availability group or of the bucket, or the organization ID for organization rules. A bucket rule must be created in the bucket's project.
+- `target_id` (String) ID of the VPS or baremetal server, UUID of the availability group or of the bucket, or the organization ID for organization rules. A bucket rule must be created in the bucket's project. For a baremetal server use the server number (the id attribute of cubepath_baremetal), not its uuid.
 - `target_type` (String) What the rule watches: vps, baremetal, availability_group, object_storage_bucket or organization (the Object Storage usage of the whole organization).
 - `threshold` (Number) Threshold, 0 to 1000000 for server metrics (percent for cpu, ram and disk). Object Storage metrics need a value above 0 and at most 1048576 for storage_size_gb, 100 for the error rates and 1000000 for storage_egress_gb_month and storage_cost_month.
 

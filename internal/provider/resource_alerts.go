@@ -25,6 +25,7 @@ var (
 	_ resource.ResourceWithValidateConfig = &alertChannelResource{}
 	_ resource.Resource                   = &alertRuleResource{}
 	_ resource.ResourceWithConfigure      = &alertRuleResource{}
+	_ resource.ResourceWithValidateConfig = &alertRuleResource{}
 	_ resource.ResourceWithImportState    = &alertRuleResource{}
 )
 
@@ -288,7 +289,7 @@ func (r *alertRuleResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			},
 			"target_id": schema.StringAttribute{
 				Description: "ID of the VPS or baremetal server, UUID of the availability group or of the bucket, or " +
-					"the organization ID for organization rules. A bucket rule must be created in the bucket's project.",
+					"the organization ID for organization rules. A bucket rule must be created in the bucket's project. For a baremetal server use the server number (the id attribute of cubepath_baremetal), not its uuid.",
 				Required: true,
 			},
 			"target_name": schema.StringAttribute{
@@ -526,4 +527,9 @@ func fillAlertRule(state *alertRuleModel, rule *client.AlertRule) {
 	state.CooldownSeconds = types.Int64Value(int64(rule.CooldownSeconds))
 	state.Status = types.StringValue(rule.Status)
 	state.Enabled = types.BoolValue(rule.Status != "disabled")
+}
+
+// ValidateConfig rejects a uuid as the target of a baremetal server: the field takes the server number.
+func (r *alertRuleResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	validateNoBaremetalUUID(ctx, req.Config, "target_type", "target_id", &resp.Diagnostics)
 }

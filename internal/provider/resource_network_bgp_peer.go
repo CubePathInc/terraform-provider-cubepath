@@ -19,9 +19,10 @@ import (
 )
 
 var (
-	_ resource.Resource                = &networkBGPPeerResource{}
-	_ resource.ResourceWithConfigure   = &networkBGPPeerResource{}
-	_ resource.ResourceWithImportState = &networkBGPPeerResource{}
+	_ resource.Resource                   = &networkBGPPeerResource{}
+	_ resource.ResourceWithConfigure      = &networkBGPPeerResource{}
+	_ resource.ResourceWithValidateConfig = &networkBGPPeerResource{}
+	_ resource.ResourceWithImportState    = &networkBGPPeerResource{}
 )
 
 func NewNetworkBGPPeerResource() resource.Resource {
@@ -74,7 +75,7 @@ func (r *networkBGPPeerResource) Schema(_ context.Context, _ resource.SchemaRequ
 			},
 			"peer_target": schema.StringAttribute{
 				Description: "An IP address inside the network, or the ID of a VPS or baremetal server attached to it. " +
-					"Changing it forces a new peer.",
+					"For a baremetal server use the server number (the id attribute of cubepath_baremetal), not its uuid. Changing it forces a new peer.",
 				Required:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
@@ -247,4 +248,9 @@ func mapBGPPeer(m *networkBGPPeerModel, p *client.BGPPeer) {
 	m.Enabled = types.BoolValue(p.Enabled)
 	m.ResolvedPeerIP = stringOrNull(p.ResolvedPeerIP)
 	m.State = stringOrNull(p.LastState)
+}
+
+// ValidateConfig rejects a uuid as the target of a baremetal server: the field takes the server number.
+func (r *networkBGPPeerResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	validateNoBaremetalUUID(ctx, req.Config, "peer_type", "peer_target", &resp.Diagnostics)
 }

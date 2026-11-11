@@ -19,7 +19,7 @@ Manages a backend of a load balancer listener: a VPS, a baremetal server or a wh
 
 - `listener_id` (String) UUID of the listener. Changing it forces a new target.
 - `loadbalancer_id` (String) UUID of the load balancer. Changing it forces a new target.
-- `target_id` (String) ID of the VPS or baremetal server, or UUID of the availability group. Changing it forces a new target.
+- `target_id` (String) ID of the VPS or baremetal server, or UUID of the availability group. For a baremetal server use the server number (the id attribute of cubepath_baremetal), not its uuid. Changing it forces a new target.
 - `target_type` (String) Backend type: vps, baremetal or availability_group. Changing it forces a new target.
 
 ### Optional
