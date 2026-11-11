@@ -591,6 +591,8 @@ func (r *baremetalResource) updateStateFromBaremetal(ctx context.Context, state 
 	// OS
 	if bm.OS != nil {
 		state.OSName = types.StringValue(bm.OS.Name)
+	} else if state.OSName.IsUnknown() {
+		state.OSName = types.StringNull()
 	}
 
 	// Monitoring
@@ -609,7 +611,9 @@ func (r *baremetalResource) updateStateFromBaremetal(ctx context.Context, state 
 		state.PrivateIP = types.StringNull()
 	}
 
-	// IPs
+	// IPs. A server without an address of a family has null there, never unknown.
+	state.MainIP = types.StringNull()
+	state.IPv6 = types.StringNull()
 	for _, ip := range bm.FloatingIPs {
 		if ip.Type == "IPv4" {
 			state.MainIP = types.StringValue(ip.Address)
