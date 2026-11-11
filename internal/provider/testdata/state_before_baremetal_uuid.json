@@ -1,0 +1,172 @@
+{
+  "version": 4,
+  "terraform_version": "1.14.2",
+  "serial": 6,
+  "lineage": "19926305-307b-3dd6-ee16-0ad3b4071221",
+  "outputs": {},
+  "resources": [
+    {
+      "mode": "managed",
+      "type": "cubepath_alert_rule",
+      "name": "a",
+      "provider": "provider[\"registry.terraform.io/hashicorp/cubepath\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "channel_ids": [
+              "33333333-3333-4333-8333-333333333333"
+            ],
+            "cooldown_seconds": 600,
+            "description": null,
+            "duration_seconds": 300,
+            "enabled": true,
+            "id": "rule-3",
+            "metric_type": "network_in",
+            "name": "bm-network",
+            "operator": "gt",
+            "project_id": 7,
+            "status": "enabled",
+            "target_id": "123",
+            "target_name": null,
+            "target_type": "baremetal",
+            "threshold": 80
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0,
+          "dependencies": [
+            "cubepath_baremetal.web"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "cubepath_baremetal",
+      "name": "web",
+      "provider": "provider[\"registry.terraform.io/hashicorp/cubepath\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "cpu": "Xeon",
+            "created_at": "2026-11-01 10:00:00 +0000 UTC",
+            "disk_layout_name": null,
+            "disk_size": "2 x 1TB",
+            "hostname": "web1",
+            "id": "123",
+            "ipv6": "2001:db8::10",
+            "label": "web1",
+            "location": "us-mia-1",
+            "main_ip": "203.0.113.10",
+            "model_name": "c1.metal.plus",
+            "monitoring_enable": false,
+            "network_id": null,
+            "os_name": "debian-12",
+            "password": "Str0ngPassw0rd1",
+            "power_state": "running",
+            "private_ip": null,
+            "project_id": 7,
+            "protected": false,
+            "ram": 64,
+            "ssh_key_ids": null,
+            "status": "active",
+            "storage_type": "NVMe",
+            "timeouts": null,
+            "user": "root"
+          },
+          "sensitive_attributes": [
+            [
+              {
+                "type": "get_attr",
+                "value": "password"
+              }
+            ]
+          ],
+          "identity_schema_version": 0
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "cubepath_lb_target",
+      "name": "t",
+      "provider": "provider[\"registry.terraform.io/hashicorp/cubepath\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "enabled": true,
+            "health_status": "healthy",
+            "id": "target-4",
+            "listener_id": "22222222-2222-4222-8222-222222222222",
+            "loadbalancer_id": "11111111-1111-4111-8111-111111111111",
+            "port": null,
+            "target_id": "123",
+            "target_name": "web",
+            "target_type": "baremetal",
+            "weight": 100
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0,
+          "dependencies": [
+            "cubepath_baremetal.web"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "cubepath_network_bgp_peer",
+      "name": "p",
+      "provider": "provider[\"registry.terraform.io/hashicorp/cubepath\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "description": null,
+            "enabled": true,
+            "id": "peer-1",
+            "max_prefix": 100,
+            "network_id": 5,
+            "peer_target": "123",
+            "peer_type": "baremetal",
+            "remote_asn": 65001,
+            "resolved_peer_ip": "10.0.0.2",
+            "state": "Established"
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0,
+          "dependencies": [
+            "cubepath_baremetal.web"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "cubepath_network_route",
+      "name": "r",
+      "provider": "provider[\"registry.terraform.io/hashicorp/cubepath\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "description": "",
+            "destination": "192.168.10.0/24",
+            "id": "route-2",
+            "network_id": 5,
+            "next_hop_target": "123",
+            "next_hop_type": "baremetal"
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0,
+          "dependencies": [
+            "cubepath_baremetal.web"
+          ]
+        }
+      ]
+    }
+  ],
+  "check_results": null
+}
