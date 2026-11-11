@@ -180,7 +180,7 @@ func TestMoveEndpoints(t *testing.T) {
 	ctx := context.Background()
 	calls := []func() error{
 		func() error { return c.VPS.MoveProject(ctx, 1, 9) },
-		func() error { return c.Baremetal.MoveProject(ctx, 2, 9) },
+		func() error { return c.Baremetal.MoveProject(ctx, "2", 9) },
 		func() error { return c.Networks.MoveProject(ctx, 3, 9) },
 		func() error { return c.LoadBalancer.MoveProject(ctx, "lb", 9) },
 		func() error { return c.NATGateway.MoveProject(ctx, "ng", 9) },

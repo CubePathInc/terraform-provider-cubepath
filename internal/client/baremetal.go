@@ -28,8 +28,12 @@ func (b *BaremetalService) Deploy(ctx context.Context, projectID int, req *Creat
 	return &result, nil
 }
 
-// Get retrieves a specific baremetal server by ID
-func (b *BaremetalService) Get(ctx context.Context, baremetalID int) (*Baremetal, error) {
+// Get retrieves a specific baremetal server by number or uuid
+func (b *BaremetalService) Get(ctx context.Context, baremetalRef string) (*Baremetal, error) {
+	ref, err := ParseBaremetalRef(baremetalRef)
+	if err != nil {
+		return nil, err
+	}
 	projects, err := b.client.Projects.List(ctx)
 	if err != nil {
 		return nil, err
@@ -38,7 +42,7 @@ func (b *BaremetalService) Get(ctx context.Context, baremetalID int) (*Baremetal
 	// Search for baremetal in all projects
 	for _, projectResp := range projects {
 		for _, baremetal := range projectResp.Baremetals {
-			if baremetal.ID == baremetalID {
+			if matchesBaremetalRef(&baremetal, ref) {
 				// project_id is not included in the nested baremetal objects
 				if baremetal.ProjectID == 0 {
 					baremetal.ProjectID = projectResp.Project.ID
@@ -51,13 +55,17 @@ func (b *BaremetalService) Get(ctx context.Context, baremetalID int) (*Baremetal
 	return nil, &APIError{
 		StatusCode: 404,
 		Message:    "Not Found",
-		Detail:     fmt.Sprintf("Baremetal with ID %d not found", baremetalID),
+		Detail:     fmt.Sprintf("Baremetal %s not found", ref),
 	}
 }
 
 // Update updates a baremetal server's hostname or label
-func (b *BaremetalService) Update(ctx context.Context, baremetalID int, req *UpdateBaremetalRequest) error {
-	err := b.client.Patch(ctx, fmt.Sprintf("/baremetal/update/%d", baremetalID), req, nil)
+func (b *BaremetalService) Update(ctx context.Context, baremetalRef string, req *UpdateBaremetalRequest) error {
+	ref, refErr := ParseBaremetalRef(baremetalRef)
+	if refErr != nil {
+		return refErr
+	}
+	err := b.client.Patch(ctx, fmt.Sprintf("/baremetal/update/%s", ref), req, nil)
 	if err != nil {
 		return fmt.Errorf("failed to update baremetal: %w", err)
 	}
@@ -66,9 +74,13 @@ func (b *BaremetalService) Update(ctx context.Context, baremetalID int, req *Upd
 
 // Power sends a power control command to a baremetal server
 // powerType can be: start_metal, stop_metal, restart_metal
-func (b *BaremetalService) Power(ctx context.Context, baremetalID int, powerType string) (*TaskResponse, error) {
+func (b *BaremetalService) Power(ctx context.Context, baremetalRef string, powerType string) (*TaskResponse, error) {
+	ref, refErr := ParseBaremetalRef(baremetalRef)
+	if refErr != nil {
+		return nil, refErr
+	}
 	var result TaskResponse
-	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/%d/power/%s", baremetalID, powerType), nil, &result)
+	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/%s/power/%s", ref, powerType), nil, &result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send power command %s to baremetal: %w", powerType, err)
 	}
@@ -76,24 +88,28 @@ func (b *BaremetalService) Power(ctx context.Context, baremetalID int, powerType
 }
 
 // Start starts a stopped baremetal server
-func (b *BaremetalService) Start(ctx context.Context, baremetalID int) (*TaskResponse, error) {
-	return b.Power(ctx, baremetalID, "start_metal")
+func (b *BaremetalService) Start(ctx context.Context, baremetalRef string) (*TaskResponse, error) {
+	return b.Power(ctx, baremetalRef, "start_metal")
 }
 
 // Stop gracefully stops a running baremetal server
-func (b *BaremetalService) Stop(ctx context.Context, baremetalID int) (*TaskResponse, error) {
-	return b.Power(ctx, baremetalID, "stop_metal")
+func (b *BaremetalService) Stop(ctx context.Context, baremetalRef string) (*TaskResponse, error) {
+	return b.Power(ctx, baremetalRef, "stop_metal")
 }
 
 // Restart gracefully restarts a baremetal server
-func (b *BaremetalService) Restart(ctx context.Context, baremetalID int) (*TaskResponse, error) {
-	return b.Power(ctx, baremetalID, "restart_metal")
+func (b *BaremetalService) Restart(ctx context.Context, baremetalRef string) (*TaskResponse, error) {
+	return b.Power(ctx, baremetalRef, "restart_metal")
 }
 
 // UpdateMonitoring enables or disables monitoring for a baremetal server
-func (b *BaremetalService) UpdateMonitoring(ctx context.Context, baremetalID int, enabled bool) error {
+func (b *BaremetalService) UpdateMonitoring(ctx context.Context, baremetalRef string, enabled bool) error {
+	ref, refErr := ParseBaremetalRef(baremetalRef)
+	if refErr != nil {
+		return refErr
+	}
 	data := map[string]bool{"monitoring_enable": enabled}
-	err := b.client.Put(ctx, fmt.Sprintf("/baremetal/%d/monitoring", baremetalID), data, nil)
+	err := b.client.Put(ctx, fmt.Sprintf("/baremetal/%s/monitoring", ref), data, nil)
 	if err != nil {
 		return fmt.Errorf("failed to update baremetal monitoring: %w", err)
 	}
@@ -101,9 +117,13 @@ func (b *BaremetalService) UpdateMonitoring(ctx context.Context, baremetalID int
 }
 
 // Reinstall reinstalls the OS on a baremetal server
-func (b *BaremetalService) Reinstall(ctx context.Context, baremetalID int, req *ReinstallBaremetalRequest) (*TaskResponse, error) {
+func (b *BaremetalService) Reinstall(ctx context.Context, baremetalRef string, req *ReinstallBaremetalRequest) (*TaskResponse, error) {
+	ref, refErr := ParseBaremetalRef(baremetalRef)
+	if refErr != nil {
+		return nil, refErr
+	}
 	var result TaskResponse
-	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/%d/reinstall", baremetalID), req, &result)
+	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/%s/reinstall", ref), req, &result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reinstall baremetal: %w", err)
 	}
@@ -111,9 +131,13 @@ func (b *BaremetalService) Reinstall(ctx context.Context, baremetalID int, req *
 }
 
 // Rescue boots the baremetal server into rescue mode
-func (b *BaremetalService) Rescue(ctx context.Context, baremetalID int) (*TaskResponse, error) {
+func (b *BaremetalService) Rescue(ctx context.Context, baremetalRef string) (*TaskResponse, error) {
+	ref, refErr := ParseBaremetalRef(baremetalRef)
+	if refErr != nil {
+		return nil, refErr
+	}
 	var result TaskResponse
-	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/%d/rescue", baremetalID), nil, &result)
+	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/%s/rescue", ref), nil, &result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to boot baremetal into rescue mode: %w", err)
 	}
@@ -121,9 +145,13 @@ func (b *BaremetalService) Rescue(ctx context.Context, baremetalID int) (*TaskRe
 }
 
 // ResetBMC resets the BMC of a baremetal server
-func (b *BaremetalService) ResetBMC(ctx context.Context, baremetalID int) (*TaskResponse, error) {
+func (b *BaremetalService) ResetBMC(ctx context.Context, baremetalRef string) (*TaskResponse, error) {
+	ref, refErr := ParseBaremetalRef(baremetalRef)
+	if refErr != nil {
+		return nil, refErr
+	}
 	var result TaskResponse
-	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/%d/reset-bmc", baremetalID), nil, &result)
+	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/%s/reset-bmc", ref), nil, &result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reset baremetal BMC: %w", err)
 	}
@@ -131,12 +159,15 @@ func (b *BaremetalService) ResetBMC(ctx context.Context, baremetalID int) (*Task
 }
 
 // WaitForBaremetalStatus waits for a baremetal to reach a specific status
-func (b *BaremetalService) WaitForBaremetalStatus(ctx context.Context, baremetalID int, targetStatus []string, timeout time.Duration) (*Baremetal, error) {
+func (b *BaremetalService) WaitForBaremetalStatus(ctx context.Context, baremetalRef string, targetStatus []string, timeout time.Duration) (*Baremetal, error) {
+	if _, err := ParseBaremetalRef(baremetalRef); err != nil {
+		return nil, err
+	}
 	stateConf := &utils.StateChangeConf{
 		Pending: []string{"pending", "provisioning", "deploying", "installing", "starting", "stopping", "rebooting"},
 		Target:  targetStatus,
 		Refresh: func() (interface{}, string, error) {
-			baremetal, err := b.Get(ctx, baremetalID)
+			baremetal, err := b.Get(ctx, baremetalRef)
 			if err != nil {
 				if apiErr, ok := err.(*APIError); ok && apiErr.IsNotFound() {
 					return nil, "deleted", nil
@@ -163,8 +194,12 @@ func (b *BaremetalService) WaitForBaremetalStatus(ctx context.Context, baremetal
 }
 
 // SetProtection enables or disables protection. A protected server cannot be reinstalled.
-func (b *BaremetalService) SetProtection(ctx context.Context, baremetalID int, enabled bool) error {
-	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/%d/protection", baremetalID), map[string]bool{"enabled": enabled}, nil)
+func (b *BaremetalService) SetProtection(ctx context.Context, baremetalRef string, enabled bool) error {
+	ref, refErr := ParseBaremetalRef(baremetalRef)
+	if refErr != nil {
+		return refErr
+	}
+	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/%s/protection", ref), map[string]bool{"enabled": enabled}, nil)
 	if err != nil {
 		return fmt.Errorf("failed to change baremetal protection: %w", err)
 	}
@@ -172,8 +207,12 @@ func (b *BaremetalService) SetProtection(ctx context.Context, baremetalID int, e
 }
 
 // MoveProject moves a baremetal server to another project of the organization
-func (b *BaremetalService) MoveProject(ctx context.Context, baremetalID, projectID int) error {
-	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/%d/move-project", baremetalID), map[string]int{"project_id": projectID}, nil)
+func (b *BaremetalService) MoveProject(ctx context.Context, baremetalRef string, projectID int) error {
+	ref, refErr := ParseBaremetalRef(baremetalRef)
+	if refErr != nil {
+		return refErr
+	}
+	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/%s/move-project", ref), map[string]int{"project_id": projectID}, nil)
 	if err != nil {
 		return fmt.Errorf("failed to move baremetal to project %d: %w", projectID, err)
 	}
@@ -181,8 +220,12 @@ func (b *BaremetalService) MoveProject(ctx context.Context, baremetalID, project
 }
 
 // AddSSHKeys attaches SSH keys to a baremetal server. The keys are installed on the next reinstall.
-func (b *BaremetalService) AddSSHKeys(ctx context.Context, baremetalID int, keyIDs []int) error {
-	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/%d/ssh-keys", baremetalID), keyIDs, nil)
+func (b *BaremetalService) AddSSHKeys(ctx context.Context, baremetalRef string, keyIDs []int) error {
+	ref, refErr := ParseBaremetalRef(baremetalRef)
+	if refErr != nil {
+		return refErr
+	}
+	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/%s/ssh-keys", ref), keyIDs, nil)
 	if err != nil {
 		return fmt.Errorf("failed to add SSH keys to baremetal: %w", err)
 	}
@@ -190,8 +233,12 @@ func (b *BaremetalService) AddSSHKeys(ctx context.Context, baremetalID int, keyI
 }
 
 // RemoveSSHKey detaches an SSH key from a baremetal server
-func (b *BaremetalService) RemoveSSHKey(ctx context.Context, baremetalID, keyID int) error {
-	err := b.client.Delete(ctx, fmt.Sprintf("/baremetal/%d/ssh-keys/%d", baremetalID, keyID))
+func (b *BaremetalService) RemoveSSHKey(ctx context.Context, baremetalRef string, keyID int) error {
+	ref, refErr := ParseBaremetalRef(baremetalRef)
+	if refErr != nil {
+		return refErr
+	}
+	err := b.client.Delete(ctx, fmt.Sprintf("/baremetal/%s/ssh-keys/%d", ref, keyID))
 	if err != nil {
 		return fmt.Errorf("failed to remove SSH key %d from baremetal: %w", keyID, err)
 	}
@@ -199,8 +246,12 @@ func (b *BaremetalService) RemoveSSHKey(ctx context.Context, baremetalID, keyID 
 }
 
 // AttachNetwork attaches a private network to a baremetal server
-func (b *BaremetalService) AttachNetwork(ctx context.Context, baremetalID, networkID int) error {
-	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/%d/network", baremetalID), map[string]int{"network_id": networkID}, nil)
+func (b *BaremetalService) AttachNetwork(ctx context.Context, baremetalRef string, networkID int) error {
+	ref, refErr := ParseBaremetalRef(baremetalRef)
+	if refErr != nil {
+		return refErr
+	}
+	err := b.client.Post(ctx, fmt.Sprintf("/baremetal/%s/network", ref), map[string]int{"network_id": networkID}, nil)
 	if err != nil {
 		return fmt.Errorf("failed to attach network to baremetal: %w", err)
 	}
@@ -208,8 +259,12 @@ func (b *BaremetalService) AttachNetwork(ctx context.Context, baremetalID, netwo
 }
 
 // DetachNetwork detaches the private network from a baremetal server
-func (b *BaremetalService) DetachNetwork(ctx context.Context, baremetalID int) error {
-	err := b.client.Delete(ctx, fmt.Sprintf("/baremetal/%d/network", baremetalID))
+func (b *BaremetalService) DetachNetwork(ctx context.Context, baremetalRef string) error {
+	ref, refErr := ParseBaremetalRef(baremetalRef)
+	if refErr != nil {
+		return refErr
+	}
+	err := b.client.Delete(ctx, fmt.Sprintf("/baremetal/%s/network", ref))
 	if err != nil {
 		return fmt.Errorf("failed to detach network from baremetal: %w", err)
 	}

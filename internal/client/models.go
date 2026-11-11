@@ -119,7 +119,10 @@ type FloatingIP struct {
 
 // Baremetal represents a baremetal server
 type Baremetal struct {
-	ID               int            `json:"id"`
+	// ID is the server number (a number or a numeric string in the JSON); UUID is empty
+	// when the API does not send it.
+	ID               FlexID         `json:"id"`
+	UUID             string         `json:"uuid"`
 	Hostname         string         `json:"hostname"`
 	Label            string         `json:"label"`
 	ProjectID        int            `json:"project_id"`
