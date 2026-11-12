@@ -52,7 +52,7 @@ resource "cubepath_baremetal" "web" {
 }
 
 # Outputs
-# The server number: use it in next_hop_target, peer_target, lb target_id and alert target_id.
+# The server uuid: use it in assign_baremetal_id, next_hop_target, peer_target, lb target_id and alert target_id.
 output "baremetal_id" {
   value = cubepath_baremetal.web.id
 }

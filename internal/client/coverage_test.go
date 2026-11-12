@@ -180,7 +180,7 @@ func TestMoveEndpoints(t *testing.T) {
 	ctx := context.Background()
 	calls := []func() error{
 		func() error { return c.VPS.MoveProject(ctx, 1, 9) },
-		func() error { return c.Baremetal.MoveProject(ctx, "2", 9) },
+		func() error { return c.Baremetal.MoveProject(ctx, testBMUUID, 9) },
 		func() error { return c.Networks.MoveProject(ctx, 3, 9) },
 		func() error { return c.LoadBalancer.MoveProject(ctx, "lb", 9) },
 		func() error { return c.NATGateway.MoveProject(ctx, "ng", 9) },
@@ -195,7 +195,7 @@ func TestMoveEndpoints(t *testing.T) {
 		}
 	}
 	want := []string{
-		"/vps/1/move-project", "/baremetal/2/move-project", "/networks/3/move-project",
+		"/vps/1/move-project", "/baremetal/" + testBMUUID + "/move-project", "/networks/3/move-project",
 		"/loadbalancer/lb/move-project", "/nat-gateway/ng/move-to-project", "/kubernetes/k8s/move",
 		"/dns/zones/z/move-project", "/cdn/zones/c/move-project", "/vps/availability-groups/ag/move-project",
 	}

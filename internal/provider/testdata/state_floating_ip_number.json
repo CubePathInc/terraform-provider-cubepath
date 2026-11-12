@@ -1,0 +1,33 @@
+{
+  "version": 4,
+  "terraform_version": "1.14.2",
+  "serial": 2,
+  "lineage": "5b0c6b9e-0d1e-4c55-9f33-2a7d1b3c4e5f",
+  "outputs": {},
+  "resources": [
+    {
+      "mode": "managed",
+      "type": "cubepath_floating_ip",
+      "name": "f",
+      "provider": "provider[\"registry.terraform.io/hashicorp/cubepath\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "address": "203.0.113.20",
+            "assign_baremetal_id": 123,
+            "assign_vps_id": null,
+            "id": "203.0.113.20",
+            "ip_type": "IPv4",
+            "location_name": "us-mia-1",
+            "reverse_dns": "",
+            "status": "active"
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0
+        }
+      ]
+    }
+  ],
+  "check_results": null
+}

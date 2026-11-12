@@ -81,7 +81,7 @@ func (r *networkRouteResource) Schema(_ context.Context, _ resource.SchemaReques
 				},
 			},
 			"next_hop_target": schema.StringAttribute{
-				Description: "The next hop target: an IP address when next_hop_type is 'ip', or the numeric VPS/baremetal ID when next_hop_type is 'vps'/'baremetal'. For a baremetal server use the server number (the id attribute of cubepath_baremetal), not its uuid. Requires replacement if changed.",
+				Description: "The next hop target: an IP address when next_hop_type is 'ip', the numeric VPS ID when it is 'vps', or the baremetal server uuid (the id attribute of cubepath_baremetal) when it is 'baremetal'. Requires replacement if changed.",
 				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -221,7 +221,7 @@ func (r *networkRouteResource) mapToState(state *networkRouteResourceModel, rout
 	state.NetworkID = types.Int64Value(int64(route.NetworkID))
 	state.Destination = types.StringValue(route.Destination)
 	state.NextHopType = types.StringValue(route.NextHopType)
-	state.NextHopTarget = types.StringValue(route.NextHopTarget)
+	state.NextHopTarget = sameOrAPI(state.NextHopTarget, route.NextHopTarget)
 	state.Description = types.StringValue(route.Description)
 }
 
@@ -255,7 +255,7 @@ func (v stringOneOfValidator) ValidateString(_ context.Context, req validator.St
 	)
 }
 
-// ValidateConfig rejects a uuid as the target of a baremetal server: the field takes the server number.
+// ValidateConfig requires the uuid when the target is a baremetal server.
 func (r *networkRouteResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
-	validateNoBaremetalUUID(ctx, req.Config, "next_hop_type", "next_hop_target", &resp.Diagnostics)
+	validateBaremetalTarget(ctx, req.Config, "next_hop_type", "next_hop_target", &resp.Diagnostics)
 }

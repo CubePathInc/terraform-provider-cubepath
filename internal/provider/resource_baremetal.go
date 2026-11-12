@@ -72,14 +72,14 @@ func (r *baremetalResource) Schema(ctx context.Context, _ resource.SchemaRequest
 		Description: "Manages a Baremetal server on CubePath Cloud. Destroying this resource (terraform destroy, or removing it from the configuration) only removes it from the Terraform state: the server is still running and billed, and has to be cancelled from the CubePath dashboard. If the server is no longer found in any project, the read fails with an error instead of dropping it from the state, so the next plan does not create a second server; if it was cancelled on purpose, remove it with terraform state rm.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Description: "The server number, as text. Import accepts the number or the uuid; the state always keeps the number.",
+				Description: "The uuid of the Baremetal server. Import takes the uuid. A state written by an older provider version holds the server number here: remove it with terraform state rm and import the server again by its uuid.",
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"uuid": schema.StringAttribute{
-				Description: "The uuid of the Baremetal server. Null while the API does not send it.",
+				Description: "The uuid of the Baremetal server, the same value as id.",
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -340,7 +340,7 @@ func (r *baremetalResource) Create(ctx context.Context, req resource.CreateReque
 	}
 
 	// Wait for baremetal to be active
-	baremetal, err := r.client.Baremetal.WaitForBaremetalStatus(createCtx, createdBaremetal.ID.String(), []string{"active", "running"}, createTimeout)
+	baremetal, err := r.client.Baremetal.WaitForBaremetalStatus(createCtx, createdBaremetal.ID, []string{"active", "running"}, createTimeout)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Timeout waiting for Baremetal",
@@ -351,7 +351,7 @@ func (r *baremetalResource) Create(ctx context.Context, req resource.CreateReque
 
 	// Update monitoring if specified
 	if !plan.MonitoringEnable.IsNull() {
-		err := r.client.Baremetal.UpdateMonitoring(ctx, baremetal.ID.String(), plan.MonitoringEnable.ValueBool())
+		err := r.client.Baremetal.UpdateMonitoring(ctx, baremetal.ID, plan.MonitoringEnable.ValueBool())
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error updating Baremetal monitoring",
@@ -362,21 +362,21 @@ func (r *baremetalResource) Create(ctx context.Context, req resource.CreateReque
 	}
 
 	// Save the ID right away so a failed follow-up call does not lose track of the server.
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), baremetal.ID.String())...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), strings.ToLower(baremetal.ID))...)
 
 	if plan.Protected.ValueBool() {
-		if err := r.client.Baremetal.SetProtection(createCtx, baremetal.ID.String(), true); err != nil {
+		if err := r.client.Baremetal.SetProtection(createCtx, baremetal.ID, true); err != nil {
 			resp.Diagnostics.AddError("Error enabling Baremetal protection", err.Error())
 			return
 		}
 	}
 	if networkID := knownInt(plan.NetworkID); networkID != nil && *networkID != 0 {
-		if err := r.client.Baremetal.AttachNetwork(createCtx, baremetal.ID.String(), *networkID); err != nil {
+		if err := r.client.Baremetal.AttachNetwork(createCtx, baremetal.ID, *networkID); err != nil {
 			resp.Diagnostics.AddError("Error attaching private network", err.Error())
 			return
 		}
 	}
-	if baremetal, err = r.client.Baremetal.Get(createCtx, baremetal.ID.String()); err != nil {
+	if baremetal, err = r.client.Baremetal.Get(createCtx, baremetal.ID); err != nil {
 		resp.Diagnostics.AddError("Error reading Baremetal after deployment", err.Error())
 		return
 	}
@@ -394,12 +394,8 @@ func (r *baremetalResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	id, err := client.ParseBaremetalRef(state.ID.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error parsing Baremetal ID",
-			"Could not parse Baremetal ID: "+err.Error(),
-		)
+	id, ok := baremetalStateID(state.ID, &resp.Diagnostics)
+	if !ok {
 		return
 	}
 
@@ -442,12 +438,8 @@ func (r *baremetalResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	id, err := client.ParseBaremetalRef(state.ID.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error parsing Baremetal ID",
-			"Could not parse Baremetal ID: "+err.Error(),
-		)
+	id, ok := baremetalStateID(state.ID, &resp.Diagnostics)
+	if !ok {
 		return
 	}
 
@@ -573,7 +565,25 @@ func (r *baremetalResource) Delete(ctx context.Context, req resource.DeleteReque
 	)
 }
 
-// ImportState takes the server number or its uuid. Read then resolves it and rewrites id as the number.
+// baremetalStateID returns the uuid kept in id. A state written by a provider version that
+// stored the server number cannot be read any more: the API no longer knows server numbers.
+func baremetalStateID(id types.String, diags *diag.Diagnostics) (string, bool) {
+	ref, err := client.ParseBaremetalRef(id.ValueString())
+	if err != nil {
+		diags.AddError(
+			"Baremetal ID is a server number",
+			"The state holds the baremetal server number "+id.ValueString()+" as its id. The CubePath API identifies "+
+				"baremetal servers only by uuid now, so this server cannot be read with that id. Remove it from the state "+
+				"with 'terraform state rm cubepath_baremetal.<name>' and import it again by its uuid (shown in the "+
+				"CubePath dashboard or by 'cubecli baremetal list') with 'terraform import cubepath_baremetal.<name> <uuid>'. "+
+				"Nothing is changed on the server.",
+		)
+		return "", false
+	}
+	return ref, true
+}
+
+// ImportState takes the uuid of the server.
 func (r *baremetalResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	ref, err := client.ParseBaremetalRef(req.ID)
 	if err != nil {
@@ -584,12 +594,8 @@ func (r *baremetalResource) ImportState(ctx context.Context, req resource.Import
 }
 
 func (r *baremetalResource) updateStateFromBaremetal(ctx context.Context, state *baremetalResourceModel, bm *client.Baremetal, diags *diag.Diagnostics) {
-	state.ID = types.StringValue(bm.ID.String())
-	if bm.UUID != "" {
-		state.UUID = types.StringValue(strings.ToLower(bm.UUID))
-	} else {
-		state.UUID = types.StringNull()
-	}
+	state.ID = types.StringValue(strings.ToLower(bm.ID))
+	state.UUID = state.ID
 	state.Hostname = types.StringValue(bm.Hostname)
 	state.Label = types.StringValue(bm.Label)
 	state.Status = types.StringValue(bm.Status)

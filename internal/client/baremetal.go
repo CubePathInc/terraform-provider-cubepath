@@ -28,7 +28,7 @@ func (b *BaremetalService) Deploy(ctx context.Context, projectID int, req *Creat
 	return &result, nil
 }
 
-// Get retrieves a specific baremetal server by number or uuid
+// Get retrieves a specific baremetal server by uuid
 func (b *BaremetalService) Get(ctx context.Context, baremetalRef string) (*Baremetal, error) {
 	ref, err := ParseBaremetalRef(baremetalRef)
 	if err != nil {

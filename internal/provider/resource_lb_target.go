@@ -102,7 +102,7 @@ func (r *lbTargetResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"target_id": schema.StringAttribute{
-				Description:   "ID of the VPS or baremetal server, or UUID of the availability group. For a baremetal server use the server number (the id attribute of cubepath_baremetal), not its uuid. Changing it forces a new target.",
+				Description:   "ID of the VPS, uuid of the baremetal server (the id attribute of cubepath_baremetal) or UUID of the availability group. Changing it forces a new target.",
 				Required:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
@@ -276,7 +276,7 @@ func (r *lbTargetResource) find(ctx context.Context, m *lbTargetModel) (*client.
 
 func mapLBTarget(m *lbTargetModel, t *client.LBTarget) {
 	m.TargetType = types.StringValue(t.TargetType)
-	m.TargetID = types.StringValue(t.TargetUUID)
+	m.TargetID = sameOrAPI(m.TargetID, t.TargetUUID)
 	if t.Port > 0 {
 		m.Port = types.Int64Value(int64(t.Port))
 	} else {
@@ -514,7 +514,7 @@ func (r *lbHealthCheckResource) ImportState(ctx context.Context, req resource.Im
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("listener_id"), listenerID)...)
 }
 
-// ValidateConfig rejects a uuid as the target of a baremetal server: the field takes the server number.
+// ValidateConfig requires the uuid when the target is a baremetal server.
 func (r *lbTargetResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
-	validateNoBaremetalUUID(ctx, req.Config, "target_type", "target_id", &resp.Diagnostics)
+	validateBaremetalTarget(ctx, req.Config, "target_type", "target_id", &resp.Diagnostics)
 }

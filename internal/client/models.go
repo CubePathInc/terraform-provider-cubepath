@@ -115,13 +115,16 @@ type FloatingIP struct {
 	ProtectionType string `json:"protection_type"`
 	VPSName        string `json:"vps_name"`
 	BaremetalName  string `json:"baremetal_name"`
+	// ServiceType is "vps" or "baremetal" when the address is assigned, and ServiceID the
+	// VPS id or the baremetal server uuid.
+	ServiceType *string `json:"service_type"`
+	ServiceID   *string `json:"service_id"`
 }
 
 // Baremetal represents a baremetal server
 type Baremetal struct {
-	// ID is the server number (a number or a numeric string in the JSON); UUID is empty
-	// when the API does not send it.
-	ID               FlexID         `json:"id"`
+	// ID is the server uuid; UUID carries the same value.
+	ID               string         `json:"id"`
 	UUID             string         `json:"uuid"`
 	Hostname         string         `json:"hostname"`
 	Label            string         `json:"label"`

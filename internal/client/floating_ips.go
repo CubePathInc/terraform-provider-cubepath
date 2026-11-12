@@ -86,9 +86,13 @@ func (f *FloatingIPs) AssignToVPS(ctx context.Context, vpsID int, address string
 	return f.client.Post(ctx, path, nil, nil)
 }
 
-// AssignToBaremetal assigns a floating IP to a baremetal server
-func (f *FloatingIPs) AssignToBaremetal(ctx context.Context, baremetalID int, address string) error {
-	path := fmt.Sprintf("/floating_ips/assign/baremetal/%d?address=%s", baremetalID, url.QueryEscape(address))
+// AssignToBaremetal assigns a floating IP to a baremetal server, named by its uuid
+func (f *FloatingIPs) AssignToBaremetal(ctx context.Context, baremetalRef string, address string) error {
+	ref, err := ParseBaremetalRef(baremetalRef)
+	if err != nil {
+		return err
+	}
+	path := fmt.Sprintf("/floating_ips/assign/baremetal/%s?address=%s", ref, url.QueryEscape(address))
 	return f.client.Post(ctx, path, nil, nil)
 }
 

@@ -41,14 +41,14 @@ Manages a Baremetal server on CubePath Cloud. Destroying this resource (terrafor
 - `cpu` (String) CPU model of the server.
 - `created_at` (String) The timestamp when the server was deployed.
 - `disk_size` (String) Total disk size.
-- `id` (String) The server number, as text. Import accepts the number or the uuid; the state always keeps the number.
-- `uuid` (String) The uuid of the Baremetal server. Null while the API does not send it.
+- `id` (String) The uuid of the Baremetal server. Import takes the uuid. A state written by an older provider version holds the server number here: remove it with terraform state rm and import the server again by its uuid.
 - `ipv6` (String) The IPv6 address of the server.
 - `main_ip` (String) The main public IPv4 address of the server.
 - `private_ip` (String) Address of the server in the private network.
 - `ram` (Number) RAM in GB.
 - `status` (String) The current status of the Baremetal server (read-only).
 - `storage_type` (String) Storage type (SSD, HDD, NVMe).
+- `uuid` (String) The uuid of the Baremetal server, the same value as id.
 
 <a id="nestedblock--timeouts"></a>
 ### Nested Schema for `timeouts`

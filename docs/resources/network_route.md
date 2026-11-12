@@ -19,7 +19,7 @@ Manages a static route within a private network on CubePath Cloud.
 
 - `destination` (String) The destination CIDR for this route (e.g., 192.168.10.0/24). Requires replacement if changed.
 - `network_id` (Number) The ID of the network to add the route to. Requires replacement if changed.
-- `next_hop_target` (String) The next hop target: an IP address when next_hop_type is 'ip', or the numeric VPS/baremetal ID when next_hop_type is 'vps'/'baremetal'. For a baremetal server use the server number (the id attribute of cubepath_baremetal), not its uuid. Requires replacement if changed.
+- `next_hop_target` (String) The next hop target: an IP address when next_hop_type is 'ip', the numeric VPS ID when it is 'vps', or the baremetal server uuid (the id attribute of cubepath_baremetal) when it is 'baremetal'. Requires replacement if changed.
 - `next_hop_type` (String) The next hop type. One of: ip, vps, baremetal. Requires replacement if changed.
 
 ### Optional

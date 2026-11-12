@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/cubepath/terraform-provider-cubepath/internal/client"
@@ -11,13 +12,15 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 var (
-	_ resource.Resource                = &floatingIPResource{}
-	_ resource.ResourceWithConfigure   = &floatingIPResource{}
-	_ resource.ResourceWithImportState = &floatingIPResource{}
+	_ resource.Resource                 = &floatingIPResource{}
+	_ resource.ResourceWithConfigure    = &floatingIPResource{}
+	_ resource.ResourceWithImportState  = &floatingIPResource{}
+	_ resource.ResourceWithUpgradeState = &floatingIPResource{}
 )
 
 func NewFloatingIPResource() resource.Resource {
@@ -35,6 +38,19 @@ type floatingIPResourceModel struct {
 	LocationName      types.String `tfsdk:"location_name"`
 	ReverseDNS        types.String `tfsdk:"reverse_dns"`
 	AssignVPSID       types.Int64  `tfsdk:"assign_vps_id"`
+	AssignBaremetalID types.String `tfsdk:"assign_baremetal_id"`
+	Status            types.String `tfsdk:"status"`
+}
+
+// floatingIPResourceModelV0 is the state of schema version 0, where assign_baremetal_id was
+// the server number.
+type floatingIPResourceModelV0 struct {
+	ID                types.String `tfsdk:"id"`
+	Address           types.String `tfsdk:"address"`
+	IPType            types.String `tfsdk:"ip_type"`
+	LocationName      types.String `tfsdk:"location_name"`
+	ReverseDNS        types.String `tfsdk:"reverse_dns"`
+	AssignVPSID       types.Int64  `tfsdk:"assign_vps_id"`
 	AssignBaremetalID types.Int64  `tfsdk:"assign_baremetal_id"`
 	Status            types.String `tfsdk:"status"`
 }
@@ -46,6 +62,8 @@ func (r *floatingIPResource) Metadata(_ context.Context, req resource.MetadataRe
 func (r *floatingIPResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Manages a floating IP address on CubePath Cloud.",
+		// Version 1: assign_baremetal_id is the server uuid (a string); it was the number.
+		Version: 1,
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description: "The floating IP address (used as identifier).",
@@ -84,9 +102,10 @@ func (r *floatingIPResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Description: "VPS ID to assign the floating IP to.",
 				Optional:    true,
 			},
-			"assign_baremetal_id": schema.Int64Attribute{
-				Description: "Baremetal server number (the id attribute of cubepath_baremetal, as a number; not the uuid) to assign the floating IP to.",
+			"assign_baremetal_id": schema.StringAttribute{
+				Description: "Uuid of the baremetal server (the id attribute of cubepath_baremetal) to assign the floating IP to.",
 				Optional:    true,
+				Validators:  []validator.String{BaremetalUUIDValidator()},
 			},
 			"status": schema.StringAttribute{
 				Description: "Current status of the floating IP.",
@@ -147,7 +166,7 @@ func (r *floatingIPResource) Create(ctx context.Context, req resource.CreateRequ
 
 	// Assign to baremetal if specified
 	if !plan.AssignBaremetalID.IsNull() && !plan.AssignBaremetalID.IsUnknown() {
-		err := r.client.FloatingIPs.AssignToBaremetal(ctx, int(plan.AssignBaremetalID.ValueInt64()), ip.Address)
+		err := r.client.FloatingIPs.AssignToBaremetal(ctx, plan.AssignBaremetalID.ValueString(), ip.Address)
 		if err != nil {
 			resp.Diagnostics.AddError("Error assigning floating IP to baremetal", err.Error())
 			return
@@ -187,6 +206,12 @@ func (r *floatingIPResource) Read(ctx context.Context, req resource.ReadRequest,
 
 	state.Status = types.StringValue(ip.Status)
 	state.LocationName = types.StringValue(ip.LocationName)
+	// The API gives the uuid of the server the address is assigned to. Refreshing it from
+	// there turns a server number left by an older provider version (see UpgradeState) into
+	// the uuid, so a configuration that names the uuid shows no change.
+	if !state.AssignBaremetalID.IsNull() && ip.ServiceType != nil && *ip.ServiceType == "baremetal" && ip.ServiceID != nil {
+		state.AssignBaremetalID = sameOrAPI(state.AssignBaremetalID, *ip.ServiceID)
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -212,7 +237,7 @@ func (r *floatingIPResource) Update(ctx context.Context, req resource.UpdateRequ
 	if !oldVPS.IsNull() && (newVPS.IsNull() || oldVPS.ValueInt64() != newVPS.ValueInt64()) {
 		needsUnassign = true
 	}
-	if !oldBM.IsNull() && (newBM.IsNull() || oldBM.ValueInt64() != newBM.ValueInt64()) {
+	if !oldBM.IsNull() && (newBM.IsNull() || !strings.EqualFold(oldBM.ValueString(), newBM.ValueString())) {
 		needsUnassign = true
 	}
 
@@ -230,8 +255,8 @@ func (r *floatingIPResource) Update(ctx context.Context, req resource.UpdateRequ
 			return
 		}
 	}
-	if !newBM.IsNull() && !newBM.IsUnknown() && (oldBM.IsNull() || oldBM.ValueInt64() != newBM.ValueInt64()) {
-		if err := r.client.FloatingIPs.AssignToBaremetal(ctx, int(newBM.ValueInt64()), address); err != nil {
+	if !newBM.IsNull() && !newBM.IsUnknown() && (oldBM.IsNull() || !strings.EqualFold(oldBM.ValueString(), newBM.ValueString())) {
+		if err := r.client.FloatingIPs.AssignToBaremetal(ctx, newBM.ValueString(), address); err != nil {
 			resp.Diagnostics.AddError("Error assigning floating IP to baremetal", err.Error())
 			return
 		}
@@ -267,7 +292,7 @@ func (r *floatingIPResource) Delete(ctx context.Context, req resource.DeleteRequ
 
 	// Unassign first if assigned
 	if (!state.AssignVPSID.IsNull() && state.AssignVPSID.ValueInt64() > 0) ||
-		(!state.AssignBaremetalID.IsNull() && state.AssignBaremetalID.ValueInt64() > 0) {
+		(!state.AssignBaremetalID.IsNull() && state.AssignBaremetalID.ValueString() != "") {
 		_ = r.client.FloatingIPs.Unassign(ctx, address)
 	}
 
@@ -280,4 +305,46 @@ func (r *floatingIPResource) Delete(ctx context.Context, req resource.DeleteRequ
 
 func (r *floatingIPResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+// UpgradeState moves a state of schema version 0, where assign_baremetal_id was the server
+// number, to version 1. The API no longer knows server numbers, so the number cannot be
+// turned into the uuid here: it is kept as text ("12"), 0 or null become null, and the next
+// refresh replaces it with the uuid the API reports for the address (see Read).
+func (r *floatingIPResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
+	var current resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &current)
+	attrs := make(map[string]schema.Attribute, len(current.Schema.Attributes))
+	for name, attr := range current.Schema.Attributes {
+		attrs[name] = attr
+	}
+	attrs["assign_baremetal_id"] = schema.Int64Attribute{Optional: true}
+	prior := schema.Schema{Attributes: attrs}
+
+	return map[int64]resource.StateUpgrader{
+		0: {
+			PriorSchema: &prior,
+			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+				var old floatingIPResourceModelV0
+				resp.Diagnostics.Append(req.State.Get(ctx, &old)...)
+				if resp.Diagnostics.HasError() {
+					return
+				}
+				baremetal := types.StringNull()
+				if !old.AssignBaremetalID.IsNull() && !old.AssignBaremetalID.IsUnknown() && old.AssignBaremetalID.ValueInt64() != 0 {
+					baremetal = types.StringValue(strconv.FormatInt(old.AssignBaremetalID.ValueInt64(), 10))
+				}
+				resp.Diagnostics.Append(resp.State.Set(ctx, floatingIPResourceModel{
+					ID:                old.ID,
+					Address:           old.Address,
+					IPType:            old.IPType,
+					LocationName:      old.LocationName,
+					ReverseDNS:        old.ReverseDNS,
+					AssignVPSID:       old.AssignVPSID,
+					AssignBaremetalID: baremetal,
+					Status:            old.Status,
+				})...)
+			},
+		},
+	}
 }

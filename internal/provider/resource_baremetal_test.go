@@ -36,7 +36,7 @@ func TestBaremetalDeleteOnlyRemovesFromState(t *testing.T) {
 	for name, typ := range objType.AttributeTypes {
 		vals[name] = tftypes.NewValue(typ, nil)
 	}
-	vals["id"] = tftypes.NewValue(tftypes.String, "123")
+	vals["id"] = tftypes.NewValue(tftypes.String, fakeBMUUID)
 	state := tfsdk.State{Schema: schemaResp.Schema, Raw: tftypes.NewValue(objType, vals)}
 
 	resp := &resource.DeleteResponse{State: state}
@@ -73,8 +73,35 @@ func baremetalReadState(t *testing.T, r *baremetalResource, id string) (tfsdk.St
 func TestBaremetalReadNotFoundIsAnErrorNotRemoval(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`[{"project":{"id":1,"name":"p"},"baremetals":[{"id":999,"hostname":"other"}]}]`))
+		_, _ = w.Write([]byte(`[{"project":{"id":1,"name":"p"},"baremetals":[{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","uuid":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","hostname":"other"}]}]`))
 	}))
+	defer srv.Close()
+	c, err := client.NewClient("token", srv.URL, client.WithMaxRetries(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &baremetalResource{client: c}
+	state, _ := baremetalReadState(t, r, fakeBMUUID)
+
+	resp := &resource.ReadResponse{State: state}
+	r.Read(context.Background(), resource.ReadRequest{State: state}, resp)
+
+	if !resp.Diagnostics.HasError() || resp.Diagnostics.Errors()[0].Summary() != "Baremetal not found" {
+		t.Fatalf("Read of a missing baremetal: %v", resp.Diagnostics)
+	}
+	if !strings.Contains(resp.Diagnostics.Errors()[0].Detail(), "terraform state rm") {
+		t.Fatalf("error does not explain how to proceed: %v", resp.Diagnostics)
+	}
+	if resp.State.Raw.IsNull() {
+		t.Fatal("Read removed the resource from the state")
+	}
+}
+
+// A state written when the id was the server number cannot be read: the API no longer knows
+// numbers. Read says how to move on, keeps the resource and sends nothing.
+func TestBaremetalReadOfANumberIDIsAnError(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls++ }))
 	defer srv.Close()
 	c, err := client.NewClient("token", srv.URL, client.WithMaxRetries(0))
 	if err != nil {
@@ -86,13 +113,14 @@ func TestBaremetalReadNotFoundIsAnErrorNotRemoval(t *testing.T) {
 	resp := &resource.ReadResponse{State: state}
 	r.Read(context.Background(), resource.ReadRequest{State: state}, resp)
 
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("Read of a missing baremetal returned no error")
+	if !resp.Diagnostics.HasError() || resp.Diagnostics.Errors()[0].Summary() != "Baremetal ID is a server number" {
+		t.Fatalf("diagnostics %v", resp.Diagnostics)
 	}
-	if !strings.Contains(resp.Diagnostics.Errors()[0].Detail(), "terraform state rm") {
-		t.Fatalf("error does not explain how to proceed: %v", resp.Diagnostics)
+	detail := resp.Diagnostics.Errors()[0].Detail()
+	if !strings.Contains(detail, "terraform state rm") || !strings.Contains(detail, "terraform import cubepath_baremetal.<name> <uuid>") {
+		t.Fatalf("error does not explain how to proceed: %s", detail)
 	}
-	if resp.State.Raw.IsNull() {
-		t.Fatal("Read removed the resource from the state")
+	if resp.State.Raw.IsNull() || calls != 0 {
+		t.Fatalf("state removed (%v) or %d requests sent", resp.State.Raw.IsNull(), calls)
 	}
 }

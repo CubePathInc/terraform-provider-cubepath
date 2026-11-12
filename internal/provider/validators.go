@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"strings"
 
 	"github.com/cubepath/terraform-provider-cubepath/internal/client"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -204,22 +205,60 @@ func StrongPasswordValidator() validator.String {
 	return strongPasswordValidator{}
 }
 
-// validateNoBaremetalUUID rejects a uuid-shaped target when the target is a baremetal
-// server. The API gives and compares the server number in these fields (and rewrites the
-// stored value as the number), so a uuid would show a permanent difference and, where the
-// attribute forces a new resource, replace it. Unknown values cannot be checked at plan time.
-func validateNoBaremetalUUID(ctx context.Context, config tfsdk.Config, typeAttr, targetAttr string, diags *diag.Diagnostics) {
+// baremetalUUIDMessage is the error shown when a baremetal server is given by anything but its uuid.
+func baremetalUUIDMessage(attr string) string {
+	return fmt.Sprintf("%s must be the baremetal server uuid (the id attribute of cubepath_baremetal). "+
+		"The CubePath API no longer accepts server numbers. If the value comes from the id of a cubepath_baremetal "+
+		"whose state still holds the server number, remove that server from the state with terraform state rm and "+
+		"import it again by its uuid with terraform import.", attr)
+}
+
+// validateBaremetalTarget rejects a target that is not a uuid when the target is a baremetal
+// server. The API takes and returns only the uuid in these fields. Unknown values cannot be
+// checked at plan time.
+func validateBaremetalTarget(ctx context.Context, config tfsdk.Config, typeAttr, targetAttr string, diags *diag.Diagnostics) {
 	var targetType, target types.String
 	diags.Append(config.GetAttribute(ctx, path.Root(typeAttr), &targetType)...)
 	diags.Append(config.GetAttribute(ctx, path.Root(targetAttr), &target)...)
 	if diags.HasError() || targetType.IsNull() || targetType.IsUnknown() || target.IsNull() || target.IsUnknown() {
 		return
 	}
-	if targetType.ValueString() == "baremetal" && client.IsUUID(target.ValueString()) {
-		diags.AddAttributeError(
-			path.Root(targetAttr),
-			"Use the server number, not its uuid",
-			fmt.Sprintf("%s must be the baremetal server number (the .id attribute of cubepath_baremetal), not its uuid.", targetAttr),
-		)
+	if targetType.ValueString() == "baremetal" && !client.IsUUID(target.ValueString()) {
+		diags.AddAttributeError(path.Root(targetAttr), "Use the baremetal server uuid", baremetalUUIDMessage(targetAttr))
 	}
+}
+
+// baremetalUUIDValidator validates an attribute that always names a baremetal server.
+type baremetalUUIDValidator struct{}
+
+func (v baremetalUUIDValidator) Description(_ context.Context) string {
+	return "value must be the uuid of a baremetal server"
+}
+
+func (v baremetalUUIDValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v baremetalUUIDValidator) ValidateString(_ context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	if !client.IsUUID(req.ConfigValue.ValueString()) {
+		resp.Diagnostics.AddAttributeError(req.Path, "Use the baremetal server uuid", baremetalUUIDMessage(req.Path.String()))
+	}
+}
+
+// BaremetalUUIDValidator returns a validator for attributes that take a baremetal server uuid.
+func BaremetalUUIDValidator() validator.String {
+	return baremetalUUIDValidator{}
+}
+
+// sameOrAPI returns the prior value when it names the same thing as the value read from the
+// API, ignoring case (a uuid written in capitals in the configuration), and the API value
+// otherwise.
+func sameOrAPI(prior types.String, api string) types.String {
+	if !prior.IsNull() && !prior.IsUnknown() && strings.EqualFold(prior.ValueString(), api) {
+		return prior
+	}
+	return types.StringValue(api)
 }
