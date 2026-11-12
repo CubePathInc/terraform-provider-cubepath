@@ -5,36 +5,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"os/exec"
 	"strings"
 	"sync"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 // These tests run the real terraform binary against an httptest fake of the CubePath API.
 // They are skipped when no terraform binary is available (TF_ACC_TERRAFORM_PATH or PATH).
-
-func requireTerraform(t *testing.T) {
-	t.Helper()
-	if os.Getenv("TF_ACC_TERRAFORM_PATH") == "" {
-		if _, err := exec.LookPath("terraform"); err != nil {
-			t.Skip("no terraform binary: set TF_ACC_TERRAFORM_PATH")
-		}
-	}
-	t.Setenv("TF_ACC", "1")
-	t.Setenv("TF_ACC_TEMP_DIR", t.TempDir())
-}
-
-func testFactories() map[string]func() (tfprotov6.ProviderServer, error) {
-	return map[string]func() (tfprotov6.ProviderServer, error){
-		"cubepath": providerserver.NewProtocol6WithError(New("test")()),
-	}
-}
 
 // fakeBaremetalAPI serves one baremetal server in project 7 with the given floating IPs.
 type fakeBaremetalAPI struct {
@@ -57,7 +36,7 @@ func (f *fakeBaremetalAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		bms := []any{}
 		if f.deployed {
 			bm := map[string]any{
-				"id": 123, "hostname": f.hostname, "label": f.hostname, "status": "active", "user": "root",
+				"id": "5198f912-edc1-42d4-b63e-d7071d55d12a", "uuid": "5198f912-edc1-42d4-b63e-d7071d55d12a", "hostname": f.hostname, "label": f.hostname, "status": "active", "user": "root",
 				"location":          map[string]any{"id": 1, "location_name": "us-mia-1", "description": "Miami"},
 				"baremetal_model":   map[string]any{"id": 1, "model_name": "c1.metal.plus", "cpu": "Xeon", "ram": 64, "storage_type": "NVMe", "disk_count": 2, "disk_size": "2 x 1TB"},
 				"floating_ips":      f.floatingIPs,
