@@ -65,7 +65,7 @@ func (r *cdnWAFRuleResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Required:    true,
 			},
 			"rule_type": schema.StringAttribute{
-				Description:   "WAF rule type: firewall_ip, firewall_country, firewall_ua, rate_limit, js_challenge, limit_download_speed, limit_requests, limit_connections, limit_bandwidth.",
+				Description:   "WAF rule type: firewall_ip, firewall_country, firewall_asn, firewall_ua, rate_limit, js_challenge, limit_download_speed, limit_requests, limit_connections, limit_bandwidth.",
 				Required:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
