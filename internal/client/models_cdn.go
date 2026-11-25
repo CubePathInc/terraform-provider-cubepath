@@ -36,6 +36,11 @@ type CDNZone struct {
 	TokenAuthSecret    *string `json:"token_auth_secret"`
 	CORSEnabled        bool    `json:"cors_enabled"`
 	CORSAllowOrigins   *string `json:"cors_allow_origins"`
+
+	// Name of the origin response header that carries the cache tags (null: tag purges are off)
+	// and compression of text responses at the edge.
+	CacheTagHeader     *string `json:"cache_tag_header"`
+	CompressionEnabled bool    `json:"compression_enabled"`
 }
 
 // CDNOrigin represents a CDN origin server
@@ -103,6 +108,33 @@ type UpdateCDNZoneRequest struct {
 	TokenAuthIPBinding *bool   `json:"token_auth_ip_binding,omitempty"`
 	CORSEnabled        *bool   `json:"cors_enabled,omitempty"`
 	CORSAllowOrigins   *string `json:"cors_allow_origins,omitempty"`
+	CompressionEnabled *bool   `json:"compression_enabled,omitempty"`
+	// CacheTagHeader sets the cache tag header; nil leaves it as it is. An empty string turns
+	// tag purges off: it is sent as JSON null, which is how the API clears it.
+	CacheTagHeader *string `json:"-"`
+}
+
+// MarshalJSON adds cache_tag_header: the name, or null when it is cleared with an empty string.
+func (r UpdateCDNZoneRequest) MarshalJSON() ([]byte, error) {
+	type plain UpdateCDNZoneRequest
+	body, err := json.Marshal(plain(r))
+	if err != nil || r.CacheTagHeader == nil {
+		return body, err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return nil, err
+	}
+	if *r.CacheTagHeader == "" {
+		fields["cache_tag_header"] = json.RawMessage("null")
+	} else {
+		name, err := json.Marshal(*r.CacheTagHeader)
+		if err != nil {
+			return nil, err
+		}
+		fields["cache_tag_header"] = name
+	}
+	return json.Marshal(fields)
 }
 
 // CreateCDNOriginRequest represents a request to create a CDN origin

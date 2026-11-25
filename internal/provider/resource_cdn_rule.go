@@ -65,7 +65,7 @@ func (r *cdnRuleResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Required:    true,
 			},
 			"rule_type": schema.StringAttribute{
-				Description:   "Edge rule type: cache, cache_bypass, redirect, header_request, header_response.",
+				Description:   "Edge rule type: cache, cache_key, cache_bypass, url_rewrite, redirect, header_request, header_response.",
 				Required:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
@@ -80,8 +80,12 @@ func (r *cdnRuleResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Optional:    true,
 			},
 			"action_config": schema.StringAttribute{
-				Description: "Action configuration as JSON string.",
-				Required:    true,
+				Description: "Action configuration as JSON string. cache: ttl, browser_ttl, cache_everything (also cache " +
+					"HTML, JSON and XML; never requests with Authorization or responses marked private or no-store), grace, " +
+					"stale_if_error and status_ttl. cache_key: query (all, none, allow or strip), query_params, vary_device " +
+					"and vary_headers; adding, changing or removing one empties the cache of the whole zone. url_rewrite: path " +
+					"(mode exact, prefix or regex, from, to), strip_query and set_query; the cache uses the rewritten URL.",
+				Required: true,
 			},
 			"enabled": schema.BoolAttribute{
 				Description: "Whether the rule is enabled.",

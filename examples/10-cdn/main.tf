@@ -16,6 +16,10 @@ resource "cubepath_cdn_zone" "main" {
   name          = "my-site"
   plan_name     = "cdn.starter"
   custom_domain = "cdn.example.com"
+
+  # Compress text responses (off by default) and purge by tag from the Cache-Tag header of the origin
+  compression_enabled = true
+  cache_tag_header    = "Cache-Tag"
 }
 
 # Add an origin server
@@ -53,6 +57,24 @@ resource "cubepath_cdn_rule" "cache_static" {
   priority    = 10
   action_config    = jsonencode({ ttl = 86400, browser_ttl = 3600 })
   match_conditions = jsonencode({ path_pattern = "\\.(css|js|png|jpg|gif|svg|woff2?)$" })
+}
+
+# Cache key: ignore every query parameter. Changing a cache key rule empties the zone cache.
+resource "cubepath_cdn_rule" "cache_key" {
+  zone_uuid     = cubepath_cdn_zone.main.id
+  name          = "ignore-query"
+  rule_type     = "cache_key"
+  priority      = 20
+  action_config = jsonencode({ query = "none" })
+}
+
+# Rewrite /old/ to /new/ for the origin; the cache uses the rewritten URL
+resource "cubepath_cdn_rule" "rewrite" {
+  zone_uuid     = cubepath_cdn_zone.main.id
+  name          = "old-to-new"
+  rule_type     = "url_rewrite"
+  priority      = 30
+  action_config = jsonencode({ path = { mode = "prefix", from = "/old/", to = "/new/" } })
 }
 
 # Rate limit WAF rule

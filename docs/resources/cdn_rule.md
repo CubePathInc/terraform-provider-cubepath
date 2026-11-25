@@ -17,9 +17,9 @@ Manages a CDN edge rule on CubePath Cloud.
 
 ### Required
 
-- `action_config` (String) Action configuration as JSON string.
+- `action_config` (String) Action configuration as JSON string. cache: ttl, browser_ttl, cache_everything (also cache HTML, JSON and XML; never requests with Authorization or responses marked private or no-store), grace, stale_if_error and status_ttl. cache_key: query (all, none, allow or strip), query_params, vary_device and vary_headers; adding, changing or removing one empties the cache of the whole zone. url_rewrite: path (mode exact, prefix or regex, from, to), strip_query and set_query; the cache uses the rewritten URL.
 - `name` (String) Rule name.
-- `rule_type` (String) Edge rule type: cache, cache_bypass, redirect, header_request, header_response.
+- `rule_type` (String) Edge rule type: cache, cache_key, cache_bypass, url_rewrite, redirect, header_request, header_response.
 - `zone_uuid` (String) The UUID of the CDN zone.
 
 ### Optional

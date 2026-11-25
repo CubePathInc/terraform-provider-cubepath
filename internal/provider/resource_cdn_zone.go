@@ -46,6 +46,8 @@ type cdnZoneResourceModel struct {
 	TokenAuthSecret    types.String `tfsdk:"token_auth_secret"`
 	CORSEnabled        types.Bool   `tfsdk:"cors_enabled"`
 	CORSAllowOrigins   types.String `tfsdk:"cors_allow_origins"`
+	CacheTagHeader     types.String `tfsdk:"cache_tag_header"`
+	CompressionEnabled types.Bool   `tfsdk:"compression_enabled"`
 }
 
 func (r *cdnZoneResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -130,6 +132,25 @@ func (r *cdnZoneResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Description: "Allowed origins: \"*\" or a comma separated list of up to 50 origins (https://example.com).",
 				Optional:    true,
 			},
+			"cache_tag_header": schema.StringAttribute{
+				Description: "Name of the origin response header whose values are the cache tags of an object, so the " +
+					"cache can be purged by tag (letters, digits, _ and -, up to 64 characters). An empty string turns tag " +
+					"purges off. Files cached before it was set have no tags. If omitted, the current setting is kept.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"compression_enabled": schema.BoolAttribute{
+				Description: "Compress text responses at the edge (Brotli, Zstandard or gzip, as the browser accepts). " +
+					"Off by default. If omitted, the current setting is kept.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
 			"status": schema.StringAttribute{
 				Description: "Current status of the CDN zone.",
 				Computed:    true,
@@ -190,8 +211,11 @@ func (r *cdnZoneResource) Create(ctx context.Context, req resource.CreateRequest
 		TokenAuthIPBinding: knownBool(plan.TokenAuthIPBinding),
 		CORSEnabled:        knownBool(plan.CORSEnabled),
 		CORSAllowOrigins:   knownString(plan.CORSAllowOrigins),
+		CacheTagHeader:     knownString(plan.CacheTagHeader),
+		CompressionEnabled: knownBool(plan.CompressionEnabled),
 	}
-	if settings.TokenAuthEnabled != nil || settings.TokenAuthIPBinding != nil || settings.CORSEnabled != nil || settings.CORSAllowOrigins != nil {
+	if settings.TokenAuthEnabled != nil || settings.TokenAuthIPBinding != nil || settings.CORSEnabled != nil || settings.CORSAllowOrigins != nil ||
+		settings.CacheTagHeader != nil || settings.CompressionEnabled != nil {
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), zone.UUID)...)
 		if err := r.client.CDN.UpdateZone(ctx, zone.UUID, settings); err != nil {
 			resp.Diagnostics.AddError("Error configuring CDN zone Token Auth and CORS", err.Error())
@@ -276,6 +300,16 @@ func (r *cdnZoneResource) Update(ctx context.Context, req resource.UpdateRequest
 		changed = true
 	}
 
+	if !plan.CompressionEnabled.IsUnknown() && !plan.CompressionEnabled.Equal(state.CompressionEnabled) {
+		updateReq.CompressionEnabled = knownBool(plan.CompressionEnabled)
+		changed = true
+	}
+	if !plan.CacheTagHeader.IsUnknown() && !plan.CacheTagHeader.Equal(state.CacheTagHeader) {
+		v := plan.CacheTagHeader.ValueString() // "" clears it
+		updateReq.CacheTagHeader = &v
+		changed = true
+	}
+
 	if !plan.ProjectID.IsUnknown() && !plan.ProjectID.Equal(state.ProjectID) {
 		if err := r.client.CDN.MoveZone(ctx, state.ID.ValueString(), int(plan.ProjectID.ValueInt64())); err != nil {
 			resp.Diagnostics.AddError("Error moving CDN zone", err.Error())
@@ -345,4 +379,9 @@ func (r *cdnZoneResource) mapToState(state *cdnZoneResourceModel, zone *client.C
 	}
 	state.CORSEnabled = types.BoolValue(zone.CORSEnabled)
 	state.CORSAllowOrigins = stringOrNull(zone.CORSAllowOrigins)
+	state.CacheTagHeader = types.StringValue("")
+	if zone.CacheTagHeader != nil {
+		state.CacheTagHeader = types.StringValue(*zone.CacheTagHeader)
+	}
+	state.CompressionEnabled = types.BoolValue(zone.CompressionEnabled)
 }
