@@ -204,7 +204,7 @@ func (r *cdnOriginResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Default:     booldefault.StaticBool(true),
 			},
 			"health_status": schema.StringAttribute{
-				Description: "Current health status: healthy, unhealthy or unknown. It is unknown while no edge node has checked the origin, and for ever when health_check_enabled is false (not checked).",
+				Description: "Current health status: healthy, unhealthy or unknown. It is unknown while no edge node has checked the origin, and for ever, meaning not checked, when no origin of the zone has health_check_enabled.",
 				Computed:    true,
 			},
 			"health_detail": schema.StringAttribute{

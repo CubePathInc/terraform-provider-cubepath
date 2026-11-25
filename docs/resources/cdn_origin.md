@@ -46,5 +46,5 @@ Manages a CDN origin server on CubePath Cloud.
 
 - `health_changed_at` (String) When the health status last changed (ISO 8601, UTC), empty until it is known.
 - `health_detail` (String) Why the origin is down (the error of the last check), empty while it is not unhealthy.
-- `health_status` (String) Current health status: healthy, unhealthy or unknown. It is unknown while no edge node has checked the origin, and for ever when health_check_enabled is false (not checked).
+- `health_status` (String) Current health status: healthy, unhealthy or unknown. It is unknown while no edge node has checked the origin, and for ever, meaning not checked, when no origin of the zone has health_check_enabled.
 - `id` (String) The UUID of the origin.
