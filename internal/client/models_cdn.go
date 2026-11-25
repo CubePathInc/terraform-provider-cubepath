@@ -116,7 +116,7 @@ type CreateCDNOriginRequest struct {
 	Priority           int    `json:"priority"`
 	IsBackup           bool   `json:"is_backup"`
 	HealthCheckEnabled bool   `json:"health_check_enabled"`
-	HealthCheckPath    string `json:"health_check_path"`
+	HealthCheckPath    string `json:"health_check_path,omitempty"`
 	VerifySSL          bool   `json:"verify_ssl"`
 	HostHeader         string `json:"host_header,omitempty"`
 	BasePath           string `json:"base_path,omitempty"`

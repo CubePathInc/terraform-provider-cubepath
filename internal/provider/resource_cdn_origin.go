@@ -143,10 +143,9 @@ func (r *cdnOriginResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Default:     booldefault.StaticBool(true),
 			},
 			"health_check_path": schema.StringAttribute{
-				Description: "Path of an http health check (up to 255 characters, starting with one /). A tcp check does not use it. Terraform sends /health when you do not set it, so set it with an http check.",
+				Description: "Path of an http health check (up to 255 characters, starting with one /). A tcp check does not use it. When you do not set it the API chooses: / for an http check, /health for a tcp one.",
 				Optional:    true,
 				Computed:    true,
-				Default:     stringdefault.StaticString("/health"),
 			},
 			"health_check_type": schema.StringAttribute{
 				Description: "Health check type: tcp (default, the edge only opens a connection) or http " +
@@ -374,7 +373,6 @@ func (r *cdnOriginResource) Create(ctx context.Context, req resource.CreateReque
 		Priority:           int(plan.Priority.ValueInt64()),
 		IsBackup:           plan.IsBackup.ValueBool(),
 		HealthCheckEnabled: plan.HealthCheckEnabled.ValueBool(),
-		HealthCheckPath:    plan.HealthCheckPath.ValueString(),
 		VerifySSL:          plan.VerifySSL.ValueBool(),
 		Enabled:            plan.Enabled.ValueBool(),
 	}
@@ -386,6 +384,9 @@ func (r *cdnOriginResource) Create(ctx context.Context, req resource.CreateReque
 	}
 	if !plan.HealthCheckExpect.IsNull() && !plan.HealthCheckExpect.IsUnknown() {
 		createReq.HealthCheckExpectedStatus = plan.HealthCheckExpect.ValueString()
+	}
+	if !plan.HealthCheckPath.IsNull() && !plan.HealthCheckPath.IsUnknown() {
+		createReq.HealthCheckPath = plan.HealthCheckPath.ValueString()
 	}
 	if !plan.HealthCheckInterval.IsNull() && !plan.HealthCheckInterval.IsUnknown() {
 		v := int(plan.HealthCheckInterval.ValueInt64())
@@ -590,7 +591,7 @@ func (r *cdnOriginResource) Update(ctx context.Context, req resource.UpdateReque
 			v := plan.HealthCheckEnabled.ValueBool()
 			updateReq.HealthCheckEnabled = &v
 		}
-		if !plan.HealthCheckPath.Equal(state.HealthCheckPath) {
+		if !plan.HealthCheckPath.IsNull() && !plan.HealthCheckPath.IsUnknown() && !plan.HealthCheckPath.Equal(state.HealthCheckPath) {
 			v := plan.HealthCheckPath.ValueString()
 			updateReq.HealthCheckPath = &v
 		}

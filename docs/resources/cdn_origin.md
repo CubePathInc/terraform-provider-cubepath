@@ -29,7 +29,7 @@ Manages a CDN origin server on CubePath Cloud.
 - `health_check_expected_status` (String) Statuses (200) or classes (2xx) that an http health check accepts, up to 8 separated by spaces. Defaults to "2xx 3xx".
 - `health_check_interval` (Number) Seconds between health checks from each edge node (5-300). Defaults to 10.
 - `health_check_method` (String) Method of an http health check: GET (default) or HEAD.
-- `health_check_path` (String) Path of an http health check (up to 255 characters, starting with one /). A tcp check does not use it. Terraform sends /health when you do not set it, so set it with an http check.
+- `health_check_path` (String) Path of an http health check (up to 255 characters, starting with one /). A tcp check does not use it. When you do not set it the API chooses: / for an http check, /health for a tcp one.
 - `health_check_threshold` (Number) Results in a row that change the health status (1-10). Defaults to 3.
 - `health_check_type` (String) Health check type: tcp (default, the edge only opens a connection) or http (the edge requests health_check_path and takes the origin out when the answer is not one of health_check_expected_status; if it is the only origin of the zone, the zone answers 503). All the origins of a zone share one check: the one of the first origin by priority that has health_check_enabled. http needs health_check_enabled to be true.
 - `host_header` (String) Custom Host header.
