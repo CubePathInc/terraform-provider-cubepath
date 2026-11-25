@@ -23,7 +23,7 @@ Manages a CDN zone on CubePath Cloud.
 ### Optional
 
 - `cache_tag_header` (String) Name of the origin response header whose values are the cache tags of an object, so the cache can be purged by tag (letters, digits, _ and -, up to 64 characters). An empty string turns tag purges off. Files cached before it was set have no tags. If omitted, the current setting is kept.
-- `compression_enabled` (Boolean) Compress text responses at the edge (Brotli, Zstandard or gzip, as the browser accepts). Off by default. If omitted, the current setting is kept.
+- `compression_enabled` (Boolean) Compress text responses at the edge (Brotli, Zstandard or gzip, as the browser accepts). Off by default: with it off the edge compresses nothing, gzip included, and responses the origin already compresses pass through unchanged. If omitted, the current setting is kept.
 - `cors_allow_origins` (String) Allowed origins: "*" or a comma separated list of up to 50 origins (https://example.com).
 - `cors_enabled` (Boolean) Add CORS headers to responses. If omitted, the current setting is kept.
 - `custom_domain` (String) Custom domain for the CDN zone.
