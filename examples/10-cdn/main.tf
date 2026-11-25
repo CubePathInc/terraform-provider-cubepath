@@ -27,7 +27,11 @@ resource "cubepath_cdn_origin" "primary" {
   protocol           = "https"
   weight             = 100
   priority           = 1
-  health_check_path  = "/health"
+
+  # Opt in to an http check; the default is a tcp check
+  health_check_type            = "http"
+  health_check_path            = "/ping"
+  health_check_expected_status = "200"
 }
 
 # Add a backup origin

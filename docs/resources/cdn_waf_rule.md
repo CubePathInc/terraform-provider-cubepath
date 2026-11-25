@@ -17,7 +17,7 @@ Manages a CDN WAF rule on CubePath Cloud.
 
 ### Required
 
-- `action_config` (String) Action configuration as JSON string.
+- `action_config` (String) Action configuration as JSON string. For firewall_ip and firewall_country, a non empty allow_ips or allow_countries means only these: any other client gets 403, and block_ips and block_countries win over the allow lists. In allow_countries, XX is a client of no known country (blocked unless XX is listed). An IPv6 client is not on a list of IPv4 addresses.
 - `name` (String) Rule name.
 - `rule_type` (String) WAF rule type: firewall_ip, firewall_country, firewall_asn, firewall_ua, rate_limit, js_challenge, limit_download_speed, limit_requests, limit_connections, limit_bandwidth.
 - `zone_uuid` (String) The UUID of the CDN zone.

@@ -9,6 +9,7 @@ import (
 
 	"github.com/cubepath/terraform-provider-cubepath/internal/client"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -35,7 +36,8 @@ const bucketOriginReadyTimeout = 3 * time.Minute
 
 var bucketOriginFixedAttributes = []string{
 	"origin_url", "address", "port", "protocol", "health_check_enabled", "health_check_path",
-	"verify_ssl", "host_header", "base_path", "enabled",
+	"health_check_type", "health_check_method", "health_check_expected_status", "health_check_interval",
+	"health_check_threshold", "verify_ssl", "host_header", "base_path", "enabled",
 }
 
 func NewCDNOriginResource() resource.Resource {
@@ -47,24 +49,31 @@ type cdnOriginResource struct {
 }
 
 type cdnOriginResourceModel struct {
-	ID                 types.String `tfsdk:"id"`
-	ZoneUUID           types.String `tfsdk:"zone_uuid"`
-	Name               types.String `tfsdk:"name"`
-	OriginURL          types.String `tfsdk:"origin_url"`
-	Address            types.String `tfsdk:"address"`
-	Port               types.Int64  `tfsdk:"port"`
-	Protocol           types.String `tfsdk:"protocol"`
-	Weight             types.Int64  `tfsdk:"weight"`
-	Priority           types.Int64  `tfsdk:"priority"`
-	IsBackup           types.Bool   `tfsdk:"is_backup"`
-	HealthCheckEnabled types.Bool   `tfsdk:"health_check_enabled"`
-	HealthCheckPath    types.String `tfsdk:"health_check_path"`
-	VerifySSL          types.Bool   `tfsdk:"verify_ssl"`
-	HostHeader         types.String `tfsdk:"host_header"`
-	BasePath           types.String `tfsdk:"base_path"`
-	Enabled            types.Bool   `tfsdk:"enabled"`
-	HealthStatus       types.String `tfsdk:"health_status"`
-	BucketUUID         types.String `tfsdk:"object_storage_bucket_uuid"`
+	ID                   types.String `tfsdk:"id"`
+	ZoneUUID             types.String `tfsdk:"zone_uuid"`
+	Name                 types.String `tfsdk:"name"`
+	OriginURL            types.String `tfsdk:"origin_url"`
+	Address              types.String `tfsdk:"address"`
+	Port                 types.Int64  `tfsdk:"port"`
+	Protocol             types.String `tfsdk:"protocol"`
+	Weight               types.Int64  `tfsdk:"weight"`
+	Priority             types.Int64  `tfsdk:"priority"`
+	IsBackup             types.Bool   `tfsdk:"is_backup"`
+	HealthCheckEnabled   types.Bool   `tfsdk:"health_check_enabled"`
+	HealthCheckPath      types.String `tfsdk:"health_check_path"`
+	HealthCheckType      types.String `tfsdk:"health_check_type"`
+	HealthCheckMethod    types.String `tfsdk:"health_check_method"`
+	HealthCheckExpect    types.String `tfsdk:"health_check_expected_status"`
+	HealthCheckInterval  types.Int64  `tfsdk:"health_check_interval"`
+	HealthCheckThreshold types.Int64  `tfsdk:"health_check_threshold"`
+	VerifySSL            types.Bool   `tfsdk:"verify_ssl"`
+	HostHeader           types.String `tfsdk:"host_header"`
+	BasePath             types.String `tfsdk:"base_path"`
+	Enabled              types.Bool   `tfsdk:"enabled"`
+	HealthStatus         types.String `tfsdk:"health_status"`
+	HealthDetail         types.String `tfsdk:"health_detail"`
+	HealthChangedAt      types.String `tfsdk:"health_changed_at"`
+	BucketUUID           types.String `tfsdk:"object_storage_bucket_uuid"`
 }
 
 func (r *cdnOriginResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -134,10 +143,44 @@ func (r *cdnOriginResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Default:     booldefault.StaticBool(true),
 			},
 			"health_check_path": schema.StringAttribute{
-				Description: "Health check path.",
+				Description: "Path of an http health check (up to 255 characters, starting with one /). A tcp check does not use it. Terraform sends /health when you do not set it, so set it with an http check.",
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("/health"),
+			},
+			"health_check_type": schema.StringAttribute{
+				Description: "Health check type: tcp (default, the edge only opens a connection) or http " +
+					"(the edge requests health_check_path and takes the origin out when the answer is not one " +
+					"of health_check_expected_status; if it is the only origin of the zone, the zone answers 503). " +
+					"All the origins of a zone share one check: the one of the first origin by priority that has " +
+					"health_check_enabled. http needs health_check_enabled to be true.",
+				Optional: true,
+				Computed: true,
+				Default:  stringdefault.StaticString("tcp"),
+			},
+			"health_check_method": schema.StringAttribute{
+				Description: "Method of an http health check: GET (default) or HEAD.",
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString("GET"),
+			},
+			"health_check_expected_status": schema.StringAttribute{
+				Description: "Statuses (200) or classes (2xx) that an http health check accepts, up to 8 separated by spaces. Defaults to \"2xx 3xx\".",
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString("2xx 3xx"),
+			},
+			"health_check_interval": schema.Int64Attribute{
+				Description: "Seconds between health checks from each edge node (5-300). Defaults to 10.",
+				Optional:    true,
+				Computed:    true,
+				Default:     int64default.StaticInt64(10),
+			},
+			"health_check_threshold": schema.Int64Attribute{
+				Description: "Results in a row that change the health status (1-10). Defaults to 3.",
+				Optional:    true,
+				Computed:    true,
+				Default:     int64default.StaticInt64(3),
 			},
 			"verify_ssl": schema.BoolAttribute{
 				Description: "Verify SSL certificates.",
@@ -162,7 +205,15 @@ func (r *cdnOriginResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Default:     booldefault.StaticBool(true),
 			},
 			"health_status": schema.StringAttribute{
-				Description: "Current health status.",
+				Description: "Current health status: healthy, unhealthy or unknown. It is unknown while no edge node has checked the origin, and for ever when health_check_enabled is false (not checked).",
+				Computed:    true,
+			},
+			"health_detail": schema.StringAttribute{
+				Description: "Why the origin is down (the error of the last check), empty while it is not unhealthy.",
+				Computed:    true,
+			},
+			"health_changed_at": schema.StringAttribute{
+				Description: "When the health status last changed (ISO 8601, UTC), empty until it is known.",
 				Computed:    true,
 			},
 			"object_storage_bucket_uuid": schema.StringAttribute{
@@ -193,9 +244,14 @@ func (r *cdnOriginResource) Configure(_ context.Context, req resource.ConfigureR
 
 // ValidateConfig refuses connection attributes next to object_storage_bucket_uuid.
 func (r *cdnOriginResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
-	var bucket types.String
-	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("object_storage_bucket_uuid"), &bucket)...)
-	if resp.Diagnostics.HasError() || bucket.IsNull() {
+	var cfg cdnOriginResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	validateOriginHealthCheck(&cfg, &resp.Diagnostics)
+	bucket := cfg.BucketUUID
+	if bucket.IsNull() {
 		return
 	}
 	for _, name := range bucketOriginFixedAttributes {
@@ -205,6 +261,41 @@ func (r *cdnOriginResource) ValidateConfig(ctx context.Context, req resource.Val
 			resp.Diagnostics.AddAttributeError(path.Root(name), "Attribute not allowed with object_storage_bucket_uuid",
 				fmt.Sprintf("%q is set from the bucket for an Object Storage origin. Only name, weight, priority and is_backup can be set.", name))
 		}
+	}
+}
+
+// validateOriginHealthCheck checks the values that are known at plan time: the type and method
+// enums and the integer ranges. Everything else is left to the API.
+func validateOriginHealthCheck(cfg *cdnOriginResourceModel, diags *diag.Diagnostics) {
+	oneOf := func(name string, v types.String, allowed ...string) {
+		if v.IsNull() || v.IsUnknown() {
+			return
+		}
+		for _, a := range allowed {
+			if v.ValueString() == a {
+				return
+			}
+		}
+		diags.AddAttributeError(path.Root(name), "Invalid value",
+			fmt.Sprintf("%s must be one of %s, got %q.", name, strings.Join(allowed, ", "), v.ValueString()))
+	}
+	inRange := func(name string, v types.Int64, lo, hi int64) {
+		if v.IsNull() || v.IsUnknown() {
+			return
+		}
+		if n := v.ValueInt64(); n < lo || n > hi {
+			diags.AddAttributeError(path.Root(name), "Invalid value",
+				fmt.Sprintf("%s must be between %d and %d, got %d.", name, lo, hi, n))
+		}
+	}
+	oneOf("health_check_type", cfg.HealthCheckType, "tcp", "http")
+	oneOf("health_check_method", cfg.HealthCheckMethod, "GET", "HEAD")
+	inRange("health_check_interval", cfg.HealthCheckInterval, 5, 300)
+	inRange("health_check_threshold", cfg.HealthCheckThreshold, 1, 10)
+	if !cfg.HealthCheckType.IsNull() && !cfg.HealthCheckType.IsUnknown() && cfg.HealthCheckType.ValueString() == "http" &&
+		!cfg.HealthCheckEnabled.IsNull() && !cfg.HealthCheckEnabled.IsUnknown() && !cfg.HealthCheckEnabled.ValueBool() {
+		diags.AddAttributeError(path.Root("health_check_type"), "Invalid combination",
+			"health_check_type http needs health_check_enabled to be true.")
 	}
 }
 
@@ -228,7 +319,7 @@ func (r *cdnOriginResource) ModifyPlan(ctx context.Context, req resource.ModifyP
 		}
 		if creating {
 			switch name {
-			case "port":
+			case "port", "health_check_interval", "health_check_threshold":
 				resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, p, types.Int64Unknown())...)
 			case "health_check_enabled", "verify_ssl", "enabled":
 				resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, p, types.BoolUnknown())...)
@@ -238,7 +329,7 @@ func (r *cdnOriginResource) ModifyPlan(ctx context.Context, req resource.ModifyP
 			continue
 		}
 		switch name {
-		case "port":
+		case "port", "health_check_interval", "health_check_threshold":
 			var v types.Int64
 			resp.Diagnostics.Append(req.State.GetAttribute(ctx, p, &v)...)
 			resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, p, v)...)
@@ -257,6 +348,11 @@ func (r *cdnOriginResource) ModifyPlan(ctx context.Context, req resource.ModifyP
 		var status types.String
 		resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("health_status"), &status)...)
 		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("health_status"), status)...)
+		for _, name := range []string{"health_detail", "health_changed_at"} {
+			var v types.String
+			resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root(name), &v)...)
+			resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root(name), v)...)
+		}
 	}
 }
 
@@ -281,6 +377,23 @@ func (r *cdnOriginResource) Create(ctx context.Context, req resource.CreateReque
 		HealthCheckPath:    plan.HealthCheckPath.ValueString(),
 		VerifySSL:          plan.VerifySSL.ValueBool(),
 		Enabled:            plan.Enabled.ValueBool(),
+	}
+	if !plan.HealthCheckType.IsNull() && !plan.HealthCheckType.IsUnknown() {
+		createReq.HealthCheckType = plan.HealthCheckType.ValueString()
+	}
+	if !plan.HealthCheckMethod.IsNull() && !plan.HealthCheckMethod.IsUnknown() {
+		createReq.HealthCheckMethod = plan.HealthCheckMethod.ValueString()
+	}
+	if !plan.HealthCheckExpect.IsNull() && !plan.HealthCheckExpect.IsUnknown() {
+		createReq.HealthCheckExpectedStatus = plan.HealthCheckExpect.ValueString()
+	}
+	if !plan.HealthCheckInterval.IsNull() && !plan.HealthCheckInterval.IsUnknown() {
+		v := int(plan.HealthCheckInterval.ValueInt64())
+		createReq.HealthCheckInterval = &v
+	}
+	if !plan.HealthCheckThreshold.IsNull() && !plan.HealthCheckThreshold.IsUnknown() {
+		v := int(plan.HealthCheckThreshold.ValueInt64())
+		createReq.HealthCheckThreshold = &v
 	}
 
 	if !plan.OriginURL.IsNull() && !plan.OriginURL.IsUnknown() {
@@ -473,6 +586,34 @@ func (r *cdnOriginResource) Update(ctx context.Context, req resource.UpdateReque
 			v := plan.BasePath.ValueString()
 			updateReq.BasePath = &v
 		}
+		if !plan.HealthCheckEnabled.Equal(state.HealthCheckEnabled) {
+			v := plan.HealthCheckEnabled.ValueBool()
+			updateReq.HealthCheckEnabled = &v
+		}
+		if !plan.HealthCheckPath.Equal(state.HealthCheckPath) {
+			v := plan.HealthCheckPath.ValueString()
+			updateReq.HealthCheckPath = &v
+		}
+		if !plan.HealthCheckType.Equal(state.HealthCheckType) {
+			v := plan.HealthCheckType.ValueString()
+			updateReq.HealthCheckType = &v
+		}
+		if !plan.HealthCheckMethod.Equal(state.HealthCheckMethod) {
+			v := plan.HealthCheckMethod.ValueString()
+			updateReq.HealthCheckMethod = &v
+		}
+		if !plan.HealthCheckExpect.Equal(state.HealthCheckExpect) {
+			v := plan.HealthCheckExpect.ValueString()
+			updateReq.HealthCheckExpectedStatus = &v
+		}
+		if !plan.HealthCheckInterval.Equal(state.HealthCheckInterval) {
+			v := int(plan.HealthCheckInterval.ValueInt64())
+			updateReq.HealthCheckInterval = &v
+		}
+		if !plan.HealthCheckThreshold.Equal(state.HealthCheckThreshold) {
+			v := int(plan.HealthCheckThreshold.ValueInt64())
+			updateReq.HealthCheckThreshold = &v
+		}
 	}
 
 	err := r.client.CDN.UpdateOrigin(ctx, state.ZoneUUID.ValueString(), state.ID.ValueString(), updateReq)
@@ -484,6 +625,8 @@ func (r *cdnOriginResource) Update(ctx context.Context, req resource.UpdateReque
 	plan.ID = state.ID
 	plan.ZoneUUID = state.ZoneUUID
 	plan.HealthStatus = state.HealthStatus
+	plan.HealthDetail = state.HealthDetail
+	plan.HealthChangedAt = state.HealthChangedAt
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
@@ -527,9 +670,23 @@ func (r *cdnOriginResource) mapToState(state *cdnOriginResourceModel, origin *cl
 	state.BasePath = types.StringValue(origin.BasePath)
 	state.Enabled = types.BoolValue(origin.Enabled)
 	state.HealthStatus = types.StringValue(origin.HealthStatus)
+	state.HealthCheckType = types.StringValue(origin.HealthCheckType)
+	state.HealthCheckMethod = types.StringValue(origin.HealthCheckMethod)
+	state.HealthCheckExpect = types.StringValue(origin.HealthCheckExpectedStatus)
+	state.HealthCheckInterval = types.Int64Value(int64(origin.HealthCheckInterval))
+	state.HealthCheckThreshold = types.Int64Value(int64(origin.HealthCheckThreshold))
+	state.HealthDetail = types.StringValue(derefString(origin.HealthDetail))
+	state.HealthChangedAt = types.StringValue(derefString(origin.HealthChangedAt))
 	if origin.ObjectStorageBucketUUID != nil && *origin.ObjectStorageBucketUUID != "" {
 		state.BucketUUID = types.StringValue(*origin.ObjectStorageBucketUUID)
 	} else {
 		state.BucketUUID = types.StringNull()
 	}
+}
+
+func derefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }

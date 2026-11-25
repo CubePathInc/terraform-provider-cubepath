@@ -80,7 +80,7 @@ func (r *cdnWAFRuleResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Optional:    true,
 			},
 			"action_config": schema.StringAttribute{
-				Description: "Action configuration as JSON string.",
+				Description: "Action configuration as JSON string. For firewall_ip and firewall_country, a non empty allow_ips or allow_countries means only these: any other client gets 403, and block_ips and block_countries win over the allow lists. In allow_countries, XX is a client of no known country (blocked unless XX is listed). An IPv6 client is not on a list of IPv4 addresses.",
 				Required:    true,
 			},
 			"enabled": schema.BoolAttribute{

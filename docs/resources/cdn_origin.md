@@ -26,7 +26,12 @@ Manages a CDN origin server on CubePath Cloud.
 - `base_path` (String) Base path prefix.
 - `enabled` (Boolean) Whether the origin is enabled.
 - `health_check_enabled` (Boolean) Enable health checks.
-- `health_check_path` (String) Health check path.
+- `health_check_expected_status` (String) Statuses (200) or classes (2xx) that an http health check accepts, up to 8 separated by spaces. Defaults to "2xx 3xx".
+- `health_check_interval` (Number) Seconds between health checks from each edge node (5-300). Defaults to 10.
+- `health_check_method` (String) Method of an http health check: GET (default) or HEAD.
+- `health_check_path` (String) Path of an http health check (up to 255 characters, starting with one /). A tcp check does not use it. Terraform sends /health when you do not set it, so set it with an http check.
+- `health_check_threshold` (Number) Results in a row that change the health status (1-10). Defaults to 3.
+- `health_check_type` (String) Health check type: tcp (default, the edge only opens a connection) or http (the edge requests health_check_path and takes the origin out when the answer is not one of health_check_expected_status; if it is the only origin of the zone, the zone answers 503). All the origins of a zone share one check: the one of the first origin by priority that has health_check_enabled. http needs health_check_enabled to be true.
 - `host_header` (String) Custom Host header.
 - `is_backup` (Boolean) Mark as backup origin.
 - `object_storage_bucket_uuid` (String) UUID of a CubePath Object Storage bucket to serve through this CDN zone. The address, port, protocol, host header, health check and read only credentials are set from the bucket, so only name, weight, priority and is_backup may be set next to it. A bucket can be served by one origin at a time. Deleting the origin stops serving the bucket. Requires the object_storage:write scope. Changing it forces a new origin.
@@ -39,5 +44,7 @@ Manages a CDN origin server on CubePath Cloud.
 
 ### Read-Only
 
-- `health_status` (String) Current health status.
+- `health_changed_at` (String) When the health status last changed (ISO 8601, UTC), empty until it is known.
+- `health_detail` (String) Why the origin is down (the error of the last check), empty while it is not unhealthy.
+- `health_status` (String) Current health status: healthy, unhealthy or unknown. It is unknown while no edge node has checked the origin, and for ever when health_check_enabled is false (not checked).
 - `id` (String) The UUID of the origin.
