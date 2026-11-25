@@ -20,6 +20,12 @@ resource "cubepath_cdn_zone" "main" {
   # Compress text responses (off by default) and purge by tag from the Cache-Tag header of the origin
   compression_enabled = true
   cache_tag_header    = "Cache-Tag"
+
+  # Managed WAF in detection mode: it logs what it finds and blocks nothing.
+  managed_waf = {
+    mode  = "log"
+    level = 1
+  }
 }
 
 # Add an origin server

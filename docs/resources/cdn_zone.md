@@ -27,6 +27,7 @@ Manages a CDN zone on CubePath Cloud.
 - `cors_allow_origins` (String) Allowed origins: "*" or a comma separated list of up to 50 origins (https://example.com).
 - `cors_enabled` (Boolean) Add CORS headers to responses. If omitted, the current setting is kept.
 - `custom_domain` (String) Custom domain for the CDN zone.
+- `managed_waf` (Attributes) Managed WAF in detection mode: a rule set CubePath runs for the zone that logs what it finds and blocks nothing. It does not inspect the request body and does not evaluate responses served from cache. Not the same as cubepath_cdn_waf_rule, which blocks traffic you choose. If omitted, the current setting is kept. (see [below for nested schema](#nestedatt--managed_waf))
 - `project_id` (Number) The project ID. Changing it moves the zone in place.
 - `ssl_type` (String) SSL type: automatic or custom.
 - `token_auth_enabled` (Boolean) Token Auth: only serve requests with a valid signed URL. The first time it is enabled the zone gets a signing secret (token_auth_secret). If omitted, the current setting is kept.
@@ -40,3 +41,13 @@ Manages a CDN zone on CubePath Cloud.
 - `status` (String) Current status of the CDN zone.
 - `token_auth_secret` (String, Sensitive) Secret used to sign URLs when Token Auth is enabled. Needs an API token with cdn:write.
 - `updated_at` (String) When the zone was last updated.
+
+<a id="nestedatt--managed_waf"></a>
+### Nested Schema for `managed_waf`
+
+Optional:
+
+- `exclude_categories` (Set of String) Rule categories the managed WAF ignores (up to 64, lowercase letters, digits, - and _, 1 to 32 characters).
+- `exclude_rule_ids` (Set of Number) Rule ids the managed WAF ignores (up to 256, each from 1 to 4294967295).
+- `level` (Number) Sensitivity level, 1 (fewest false positives) or 2. Default 1.
+- `mode` (String) off or log. Default off.

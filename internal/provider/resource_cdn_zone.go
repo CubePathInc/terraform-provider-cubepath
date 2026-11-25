@@ -3,16 +3,22 @@ package provider
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"sort"
 
 	"github.com/cubepath/terraform-provider-cubepath/internal/client"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 )
 
 var (
@@ -48,7 +54,104 @@ type cdnZoneResourceModel struct {
 	CORSAllowOrigins   types.String `tfsdk:"cors_allow_origins"`
 	CacheTagHeader     types.String `tfsdk:"cache_tag_header"`
 	CompressionEnabled types.Bool   `tfsdk:"compression_enabled"`
+	ManagedWAF         types.Object `tfsdk:"managed_waf"`
 }
+
+// managedWAFModel is the managed_waf attribute: detection only, nothing is blocked.
+type managedWAFModel struct {
+	Mode              types.String `tfsdk:"mode"`
+	Level             types.Int64  `tfsdk:"level"`
+	ExcludeRuleIDs    types.Set    `tfsdk:"exclude_rule_ids"`
+	ExcludeCategories types.Set    `tfsdk:"exclude_categories"`
+}
+
+var managedWAFAttrTypes = map[string]attr.Type{
+	"mode":               types.StringType,
+	"level":              types.Int64Type,
+	"exclude_rule_ids":   types.SetType{ElemType: types.Int64Type},
+	"exclude_categories": types.SetType{ElemType: types.StringType},
+}
+
+// managedWAFFromAPI maps what the API reports; a nil value (an API without the feature) is a null object.
+func managedWAFFromAPI(ctx context.Context, w *client.CDNManagedWAF) (types.Object, diag.Diagnostics) {
+	if w == nil {
+		return types.ObjectNull(managedWAFAttrTypes), nil
+	}
+	ids := make([]attr.Value, 0, len(w.ExcludeRuleIDs))
+	for _, id := range w.ExcludeRuleIDs {
+		ids = append(ids, types.Int64Value(id))
+	}
+	cats := make([]attr.Value, 0, len(w.ExcludeCategories))
+	for _, c := range w.ExcludeCategories {
+		cats = append(cats, types.StringValue(c))
+	}
+	idSet, d1 := types.SetValue(types.Int64Type, ids)
+	catSet, d2 := types.SetValue(types.StringType, cats)
+	diags := append(d1, d2...)
+	if diags.HasError() {
+		return types.ObjectNull(managedWAFAttrTypes), diags
+	}
+	obj, d3 := types.ObjectValue(managedWAFAttrTypes, map[string]attr.Value{
+		"mode":               types.StringValue(w.Mode),
+		"level":              types.Int64Value(int64(w.Level)),
+		"exclude_rule_ids":   idSet,
+		"exclude_categories": catSet,
+	})
+	return obj, append(diags, d3...)
+}
+
+// managedWAFRequest builds the update from the plan; nil when the attribute is not configured. A part left out
+// of the configuration takes the API default (mode off, level 1, empty lists).
+func managedWAFRequest(ctx context.Context, o types.Object) (*client.UpdateCDNManagedWAF, diag.Diagnostics) {
+	if o.IsNull() || o.IsUnknown() {
+		return nil, nil
+	}
+	var m managedWAFModel
+	diags := o.As(ctx, &m, basetypes.ObjectAsOptions{})
+	if diags.HasError() {
+		return nil, diags
+	}
+	req := &client.UpdateCDNManagedWAF{Mode: "off", Level: 1, ExcludeRuleIDs: []int64{}, ExcludeCategories: []string{}}
+	if !m.Mode.IsNull() && !m.Mode.IsUnknown() {
+		req.Mode = m.Mode.ValueString()
+	}
+	if !m.Level.IsNull() && !m.Level.IsUnknown() {
+		req.Level = int(m.Level.ValueInt64())
+	}
+	if !m.ExcludeRuleIDs.IsNull() && !m.ExcludeRuleIDs.IsUnknown() {
+		diags.Append(m.ExcludeRuleIDs.ElementsAs(ctx, &req.ExcludeRuleIDs, false)...)
+		sort.Slice(req.ExcludeRuleIDs, func(i, j int) bool { return req.ExcludeRuleIDs[i] < req.ExcludeRuleIDs[j] })
+	}
+	if !m.ExcludeCategories.IsNull() && !m.ExcludeCategories.IsUnknown() {
+		diags.Append(m.ExcludeCategories.ElementsAs(ctx, &req.ExcludeCategories, false)...)
+		sort.Strings(req.ExcludeCategories)
+	}
+	if req.Mode != "off" && req.Mode != "log" {
+		diags.AddAttributeError(path.Root("managed_waf").AtName("mode"), "Invalid managed_waf mode", "mode must be off or log.")
+	}
+	if req.Level != 1 && req.Level != 2 {
+		diags.AddAttributeError(path.Root("managed_waf").AtName("level"), "Invalid managed_waf level", "level must be 1 or 2.")
+	}
+	if len(req.ExcludeRuleIDs) > 256 {
+		diags.AddAttributeError(path.Root("managed_waf").AtName("exclude_rule_ids"), "Too many rule ids", "At most 256 rule ids.")
+	}
+	for _, id := range req.ExcludeRuleIDs {
+		if id < 1 || id > 4294967295 {
+			diags.AddAttributeError(path.Root("managed_waf").AtName("exclude_rule_ids"), "Invalid rule id", fmt.Sprintf("%d is not between 1 and 4294967295.", id))
+		}
+	}
+	if len(req.ExcludeCategories) > 64 {
+		diags.AddAttributeError(path.Root("managed_waf").AtName("exclude_categories"), "Too many categories", "At most 64 categories.")
+	}
+	for _, c := range req.ExcludeCategories {
+		if !managedWAFCategory.MatchString(c) {
+			diags.AddAttributeError(path.Root("managed_waf").AtName("exclude_categories"), "Invalid category", fmt.Sprintf("%q must be 1 to 32 characters of a-z, 0-9, - or _.", c))
+		}
+	}
+	return req, diags
+}
+
+var managedWAFCategory = regexp.MustCompile(`^[a-z0-9_-]{1,32}$`)
 
 func (r *cdnZoneResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_cdn_zone"
@@ -151,6 +254,41 @@ func (r *cdnZoneResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 					boolplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"managed_waf": schema.SingleNestedAttribute{
+				Description: "Managed WAF in detection mode: a rule set CubePath runs for the zone that logs what it finds " +
+					"and blocks nothing. It does not inspect the request body and does not evaluate responses served " +
+					"from cache. Not the same as cubepath_cdn_waf_rule, which blocks traffic you choose. If omitted, " +
+					"the current setting is kept.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Object{
+					objectplanmodifier.UseStateForUnknown(),
+				},
+				Attributes: map[string]schema.Attribute{
+					"mode": schema.StringAttribute{
+						Description: "off or log. Default off.",
+						Optional:    true,
+						Computed:    true,
+					},
+					"level": schema.Int64Attribute{
+						Description: "Sensitivity level, 1 (fewest false positives) or 2. Default 1.",
+						Optional:    true,
+						Computed:    true,
+					},
+					"exclude_rule_ids": schema.SetAttribute{
+						Description: "Rule ids the managed WAF ignores (up to 256, each from 1 to 4294967295).",
+						ElementType: types.Int64Type,
+						Optional:    true,
+						Computed:    true,
+					},
+					"exclude_categories": schema.SetAttribute{
+						Description: "Rule categories the managed WAF ignores (up to 64, lowercase letters, digits, - and _, 1 to 32 characters).",
+						ElementType: types.StringType,
+						Optional:    true,
+						Computed:    true,
+					},
+				},
+			},
 			"status": schema.StringAttribute{
 				Description: "Current status of the CDN zone.",
 				Computed:    true,
@@ -214,8 +352,14 @@ func (r *cdnZoneResource) Create(ctx context.Context, req resource.CreateRequest
 		CacheTagHeader:     knownString(plan.CacheTagHeader),
 		CompressionEnabled: knownBool(plan.CompressionEnabled),
 	}
+	waf, d := managedWAFRequest(ctx, plan.ManagedWAF)
+	resp.Diagnostics.Append(d...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	settings.ManagedWAF = waf
 	if settings.TokenAuthEnabled != nil || settings.TokenAuthIPBinding != nil || settings.CORSEnabled != nil || settings.CORSAllowOrigins != nil ||
-		settings.CacheTagHeader != nil || settings.CompressionEnabled != nil {
+		settings.CacheTagHeader != nil || settings.CompressionEnabled != nil || settings.ManagedWAF != nil {
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), zone.UUID)...)
 		if err := r.client.CDN.UpdateZone(ctx, zone.UUID, settings); err != nil {
 			resp.Diagnostics.AddError("Error configuring CDN zone Token Auth and CORS", err.Error())
@@ -231,7 +375,7 @@ func (r *cdnZoneResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 	}
 
-	r.mapToState(&plan, zone)
+	resp.Diagnostics.Append(r.mapToState(ctx, &plan, zone)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
@@ -252,7 +396,7 @@ func (r *cdnZoneResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	r.mapToState(&state, zone)
+	resp.Diagnostics.Append(r.mapToState(ctx, &state, zone)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -309,6 +453,17 @@ func (r *cdnZoneResource) Update(ctx context.Context, req resource.UpdateRequest
 		updateReq.CacheTagHeader = &v
 		changed = true
 	}
+	if !plan.ManagedWAF.IsUnknown() && !plan.ManagedWAF.Equal(state.ManagedWAF) {
+		waf, d := managedWAFRequest(ctx, plan.ManagedWAF)
+		resp.Diagnostics.Append(d...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if waf != nil {
+			updateReq.ManagedWAF = waf
+			changed = true
+		}
+	}
 
 	if !plan.ProjectID.IsUnknown() && !plan.ProjectID.Equal(state.ProjectID) {
 		if err := r.client.CDN.MoveZone(ctx, state.ID.ValueString(), int(plan.ProjectID.ValueInt64())); err != nil {
@@ -332,7 +487,7 @@ func (r *cdnZoneResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	r.mapToState(&plan, zone)
+	resp.Diagnostics.Append(r.mapToState(ctx, &plan, zone)...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
@@ -354,7 +509,7 @@ func (r *cdnZoneResource) ImportState(ctx context.Context, req resource.ImportSt
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-func (r *cdnZoneResource) mapToState(state *cdnZoneResourceModel, zone *client.CDNZone) {
+func (r *cdnZoneResource) mapToState(ctx context.Context, state *cdnZoneResourceModel, zone *client.CDNZone) diag.Diagnostics {
 	state.ID = types.StringValue(zone.UUID)
 	state.Name = types.StringValue(zone.Name)
 	state.Domain = types.StringValue(zone.Domain)
@@ -384,4 +539,7 @@ func (r *cdnZoneResource) mapToState(state *cdnZoneResourceModel, zone *client.C
 		state.CacheTagHeader = types.StringValue(*zone.CacheTagHeader)
 	}
 	state.CompressionEnabled = types.BoolValue(zone.CompressionEnabled)
+	waf, diags := managedWAFFromAPI(ctx, zone.ManagedWAF)
+	state.ManagedWAF = waf
+	return diags
 }

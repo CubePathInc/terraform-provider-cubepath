@@ -41,6 +41,25 @@ type CDNZone struct {
 	// and compression of text responses at the edge.
 	CacheTagHeader     *string `json:"cache_tag_header"`
 	CompressionEnabled bool    `json:"compression_enabled"`
+	// Absent from an API that has no managed WAF.
+	ManagedWAF *CDNManagedWAF `json:"managed_waf"`
+}
+
+// CDNManagedWAF is the managed WAF in detection mode: it logs what its rule set finds and
+// blocks nothing.
+type CDNManagedWAF struct {
+	Mode              string   `json:"mode"`
+	Level             int      `json:"level"`
+	ExcludeRuleIDs    []int64  `json:"exclude_rule_ids"`
+	ExcludeCategories []string `json:"exclude_categories"`
+}
+
+// UpdateCDNManagedWAF is the managed_waf part of an update: lists are sent whole.
+type UpdateCDNManagedWAF struct {
+	Mode              string   `json:"mode"`
+	Level             int      `json:"level"`
+	ExcludeRuleIDs    []int64  `json:"exclude_rule_ids"`
+	ExcludeCategories []string `json:"exclude_categories"`
 }
 
 // CDNOrigin represents a CDN origin server
@@ -104,11 +123,12 @@ type UpdateCDNZoneRequest struct {
 	SSLType         *string `json:"ssl_type,omitempty"`
 	CertificateUUID *string `json:"certificate_uuid,omitempty"`
 	// Nil booleans are left as they are
-	TokenAuthEnabled   *bool   `json:"token_auth_enabled,omitempty"`
-	TokenAuthIPBinding *bool   `json:"token_auth_ip_binding,omitempty"`
-	CORSEnabled        *bool   `json:"cors_enabled,omitempty"`
-	CORSAllowOrigins   *string `json:"cors_allow_origins,omitempty"`
-	CompressionEnabled *bool   `json:"compression_enabled,omitempty"`
+	TokenAuthEnabled   *bool                `json:"token_auth_enabled,omitempty"`
+	TokenAuthIPBinding *bool                `json:"token_auth_ip_binding,omitempty"`
+	CORSEnabled        *bool                `json:"cors_enabled,omitempty"`
+	CORSAllowOrigins   *string              `json:"cors_allow_origins,omitempty"`
+	CompressionEnabled *bool                `json:"compression_enabled,omitempty"`
+	ManagedWAF         *UpdateCDNManagedWAF `json:"managed_waf,omitempty"`
 	// CacheTagHeader sets the cache tag header; nil leaves it as it is. An empty string turns
 	// tag purges off: it is sent as JSON null, which is how the API clears it.
 	CacheTagHeader *string `json:"-"`

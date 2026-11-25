@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `cubepath_cdn_zone`: new `managed_waf` attribute (`mode` off or log, `level` 1 or 2, `exclude_rule_ids`,
+  `exclude_categories`) for the managed WAF in detection mode. It logs what its rule set finds and blocks
+  nothing. It is a nested attribute (`managed_waf = { ... }`), not a block. If omitted, the current setting is kept.
+
 ## 0.12.0 (2026-11-12)
 
 ### Breaking changes
