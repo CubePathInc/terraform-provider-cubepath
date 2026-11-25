@@ -144,7 +144,7 @@ func (r *cdnZoneResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			},
 			"compression_enabled": schema.BoolAttribute{
 				Description: "Compress text responses at the edge (Brotli, Zstandard or gzip, as the browser accepts). " +
-					"Off by default. If omitted, the current setting is kept.",
+					"Off by default: with it off the edge compresses nothing, gzip included, and responses the origin already compresses pass through unchanged. If omitted, the current setting is kept.",
 				Optional: true,
 				Computed: true,
 				PlanModifiers: []planmodifier.Bool{
